@@ -20,7 +20,7 @@ export const createCourse = async ( { title, description, thumbnail_url, enrollm
 
 
 export const getAllCourses = async () => {
-	const courses = await Course.find()
+	const courses = await Course.find({ is_deleted: false })
 		.populate("created_by", "full_name role") 
 		.sort({ createdAt: -1 }); 
 
@@ -31,7 +31,7 @@ export const getAllCourses = async () => {
 export const getCourseById = async (courseId) => {
 	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
 
-	const course = await Course.findById(courseId)
+	const course = await Course.findOne({ _id: courseId, is_deleted: false })
 		.populate("created_by", "full_name role");
 
 	if (!course) throw new Error("COURSE_NOT_FOUND");
@@ -43,7 +43,7 @@ export const getCourseById = async (courseId) => {
 export const updateCourse = async (courseId, { title, description, thumbnail_url, enrollment_type }, userId, userRole) => {
 	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
     
-	const course = await Course.findById(courseId);
+	const course = await Course.findOne({ _id: courseId, is_deleted: false });
 	if (!course) throw new Error("COURSE_NOT_FOUND");
     
 	const isOwner = course.created_by.toString() === userId.toString();
@@ -59,8 +59,8 @@ export const updateCourse = async (courseId, { title, description, thumbnail_url
     }
 	
 	if (title) course.title = title.trim();
-	if (description !== undefined) course.description = typeof description === "string" ? description.trim() : "";
-	if (thumbnail_url !== undefined) course.thumbnail_url = typeof thumbnail_url === "string" ? thumbnail_url.trim() : "";
+	if (description !== undefined) course.description = description.trim();
+	if (thumbnail_url !== undefined) course.thumbnail_url = thumbnail_url.trim();
 	if (enrollment_type) course.enrollment_type = enrollment_type;
 
 	const updatedCourse = await course.save();
@@ -71,12 +71,49 @@ export const updateCourse = async (courseId, { title, description, thumbnail_url
 export const deleteCourse = async (courseId, userId, userRole) => {
 	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID"); 
 
-	const course = await Course.findById(courseId); 
+	const course = await Course.findOne({ _id: courseId, is_deleted: false }); 
 	if (!course) throw new Error("COURSE_NOT_FOUND"); 
 
 	const isOwner = course.created_by.toString() === userId.toString();
 	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_COURSE_ACTION"); 
 
-	await course.deleteOne(); 
-	return { message: "Course deleted successfully" };
+	course.is_deleted = true;
+	course.deleted_at = new Date();
+	course.deleted_by = userId;
+
+    await course.save();
+	return { message: "Course moved to trash successfully" };
+};
+
+
+export const getDeletedCourses = async (userId, userRole) => {
+	const filter = { is_deleted: true };
+	
+	if (userRole !== "admin") filter.created_by = userId;
+
+	const courses = await Course.find(filter)
+		.populate("created_by", "full_name role")
+		.sort({ deleted_at: -1 });
+
+	return courses;
+};
+
+
+export const restoreCourse = async (courseId, userId, userRole) => {
+	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
+
+	const course = await Course.findOne({ _id: courseId, is_deleted: true });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	const isOwner = course.created_by.toString() === userId.toString();
+	if (userRole !== "admin" && !isOwner) {
+		throw new Error("FORBIDDEN_COURSE_ACTION");
+	}
+
+	course.is_deleted = false;
+	course.deleted_at = null;
+	course.deleted_by = null;
+
+	const restoredCourse = await course.save();
+	return restoredCourse;
 };

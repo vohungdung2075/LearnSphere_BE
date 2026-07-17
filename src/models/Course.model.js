@@ -26,6 +26,20 @@ const CourseSchema = new mongoose.Schema(
 			required: true,
 			index: true,
 		},
+		is_deleted: {
+			type: Boolean,
+			default: false,
+			index: true,
+		},
+		deleted_at: {
+			type: Date,
+			default: null,
+		},
+		deleted_by: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+			default: null,
+		},
 	},
 	{ timestamps: true },
 );

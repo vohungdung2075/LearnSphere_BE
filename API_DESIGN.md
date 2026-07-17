@@ -170,11 +170,70 @@ Sau khi đặt lại mật khẩu thành công, reset token bị xóa và không
 | `409 Conflict` | Email đăng ký đã tồn tại |
 | `500 Internal Server Error` | Lỗi database, gửi email hoặc lỗi hệ thống ngoài dự kiến |
 
+### 1.6. Admin lấy danh sách tài khoản
+
+Chỉ tài khoản có role `admin` được sử dụng API này. Có thể lọc theo `role` và `account_status`.
+
+```http
+GET /api/users?role=tutor&account_status=pending
+Authorization: Bearer <admin_access_token>
+```
+
+Response:
+
+```json
+[
+	{
+		"_id": "6870f8c90db5248718eb6e31",
+		"full_name": "Tutor Example",
+		"email": "tutor@example.com",
+		"role": "tutor",
+		"account_status": "pending",
+		"createdAt": "2026-07-17T08:00:00.000Z",
+		"updatedAt": "2026-07-17T08:00:00.000Z"
+	}
+]
+```
+
+Giá trị query hợp lệ:
+
+```text
+role: student | tutor | admin
+account_status: pending | active | blocked
+```
+
+### 1.7. Admin duyệt hoặc khóa tài khoản tutor
+
+```http
+PATCH /api/users/{user_id}/status
+Authorization: Bearer <admin_access_token>
+```
+
+Request duyệt tutor:
+
+```json
+{
+	"account_status": "active"
+}
+```
+
+Request khóa tutor:
+
+```json
+{
+	"account_status": "blocked"
+}
+```
+
+API này chỉ cập nhật tài khoản có role `tutor`. Không thể dùng để thay đổi trạng thái của student hoặc admin.
+
 ---
 
 ## 2. Course API
 
 ### 2.1. Lấy danh sách khóa học
+
+API công khai, chỉ trả về các khóa học chưa bị xóa mềm.
 
 ```http
 GET /api/courses
@@ -185,14 +244,24 @@ Response:
 ```json
 [
 	{
+		"_id": "6870f8c90db5248718eb6e31",
 		"title": "AWS Basic",
 		"description": "Khóa học nhập môn AWS",
-		"thumbnail_url": "https://s3.amazonaws.com/..."
+		"thumbnail_url": "https://s3.amazonaws.com/...",
+		"enrollment_type": "approval_required",
+		"created_by": {
+			"_id": "6870f8c90db5248718eb6e32",
+			"full_name": "Tutor Example",
+			"role": "tutor"
+		},
+		"is_deleted": false
 	}
 ]
 ```
 
 ### 2.2. Lấy chi tiết khóa học
+
+API công khai. Khóa học đã bị xóa mềm sẽ trả về `404 Not Found`.
 
 ```http
 GET /api/courses/{course_id}
@@ -200,10 +269,11 @@ GET /api/courses/{course_id}
 
 ### 2.3. Tạo khóa học
 
-Dành cho `admin`.
+Dành cho `tutor` hoặc `admin`.
 
 ```http
 POST /api/courses
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -212,14 +282,42 @@ Request:
 {
 	"title": "AWS Basic",
 	"description": "Khóa học nhập môn AWS",
-	"thumbnail_url": "https://s3.amazonaws.com/aws-basic.png"
+	"thumbnail_url": "https://s3.amazonaws.com/aws-basic.png",
+	"enrollment_type": "approval_required"
+}
+```
+
+`enrollment_type` nhận một trong hai giá trị:
+
+```text
+open              Student được active ngay sau khi đăng ký
+approval_required Student ở trạng thái pending và chờ tutor/admin duyệt
+```
+
+Response:
+
+```json
+{
+	"message": "Course created successfully",
+	"course": {
+		"_id": "6870f8c90db5248718eb6e31",
+		"title": "AWS Basic",
+		"description": "Khóa học nhập môn AWS",
+		"thumbnail_url": "https://s3.amazonaws.com/aws-basic.png",
+		"enrollment_type": "approval_required",
+		"created_by": "6870f8c90db5248718eb6e32",
+		"is_deleted": false
+	}
 }
 ```
 
 ### 2.4. Cập nhật khóa học
 
+Dành cho tutor sở hữu khóa học hoặc admin.
+
 ```http
 PUT /api/courses/{course_id}
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -228,42 +326,38 @@ Request:
 {
 	"title": "AWS Basic Updated",
 	"description": "Cập nhật nội dung khóa học AWS",
-	"thumbnail_url": "https://s3.amazonaws.com/aws-basic-new.png"
+	"thumbnail_url": "https://s3.amazonaws.com/aws-basic-new.png",
+	"enrollment_type": "open"
 }
 ```
 
-### 2.5. Xóa khóa học
+Các trường đều có thể cập nhật độc lập.
+
+### 2.5. Xóa mềm khóa học
+
+Dành cho tutor sở hữu khóa học hoặc admin. Dữ liệu không bị xóa khỏi MongoDB mà được chuyển vào thùng rác.
 
 ```http
 DELETE /api/courses/{course_id}
+Authorization: Bearer <access_token>
 ```
 
 Response:
 
 ```json
 {
-	"message": "Course deleted successfully"
+	"message": "Course moved to trash successfully"
 }
 ```
 
-### 2.6. Đăng ký học khóa học
+### 2.6. Lấy danh sách khóa học đã xóa
+
+- Tutor chỉ xem các khóa học do mình tạo.
+- Admin xem được tất cả khóa học đã xóa.
 
 ```http
-POST /api/courses/{course_id}/enroll
-```
-
-Response:
-
-```json
-{
-	"message": "Enroll course successfully"
-}
-```
-
-### 2.7. Xem các khóa học đã đăng ký của tôi
-
-```http
-GET /api/users/me/courses
+GET /api/courses/mine/deleted
+Authorization: Bearer <access_token>
 ```
 
 Response:
@@ -271,25 +365,198 @@ Response:
 ```json
 [
 	{
-		"id": 1,
+		"_id": "6870f8c90db5248718eb6e31",
 		"title": "AWS Basic",
-		"description": "Khóa học nhập môn AWS",
-		"thumbnail_url": "https://s3.amazonaws.com/..."
+		"is_deleted": true,
+		"deleted_at": "2026-07-17T08:00:00.000Z",
+		"deleted_by": "6870f8c90db5248718eb6e32"
 	}
 ]
 ```
 
-### 2.8. Hủy đăng ký khóa học
+### 2.7. Khôi phục khóa học
+
+Dành cho tutor sở hữu khóa học hoặc admin.
 
 ```http
-DELETE /api/courses/{course_id}/enroll
+PATCH /api/courses/{course_id}/restore
+Authorization: Bearer <access_token>
 ```
 
 Response:
 
 ```json
 {
-	"message": "Unenroll course successfully"
+	"message": "Course restored successfully",
+	"course": {
+		"_id": "6870f8c90db5248718eb6e31",
+		"title": "AWS Basic",
+		"is_deleted": false,
+		"deleted_at": null,
+		"deleted_by": null
+	}
+}
+```
+
+### 2.8. Student đăng ký khóa học
+
+Chỉ dành cho `student`.
+
+```http
+POST /api/courses/{course_id}/enroll
+Authorization: Bearer <student_access_token>
+```
+
+Response khi course có `enrollment_type = open`:
+
+```json
+{
+	"message": "Enrolled in course successfully",
+	"enrollment": {
+		"_id": "6870f8c90db5248718eb6e40",
+		"user_id": "6870f8c90db5248718eb6e33",
+		"course_id": "6870f8c90db5248718eb6e31",
+		"status": "active",
+		"approved_at": "2026-07-17T08:00:00.000Z"
+	}
+}
+```
+
+Response khi course có `enrollment_type = approval_required`:
+
+```json
+{
+	"message": "Enrollment request submitted successfully",
+	"enrollment": {
+		"_id": "6870f8c90db5248718eb6e40",
+		"status": "pending",
+		"approved_at": null
+	}
+}
+```
+
+### 2.9. Student xem các khóa học đã đăng ký
+
+Kết quả bao gồm cả enrollment `pending` và `active`, nhưng không bao gồm course đã bị xóa mềm.
+
+```http
+GET /api/users/me/courses
+Authorization: Bearer <student_access_token>
+```
+
+Response:
+
+```json
+[
+	{
+		"_id": "6870f8c90db5248718eb6e40",
+		"user_id": "6870f8c90db5248718eb6e33",
+		"course_id": {
+			"_id": "6870f8c90db5248718eb6e31",
+			"title": "AWS Basic",
+			"description": "Khóa học nhập môn AWS",
+			"thumbnail_url": "https://s3.amazonaws.com/...",
+			"created_by": {
+				"_id": "6870f8c90db5248718eb6e32",
+				"full_name": "Tutor Example",
+				"role": "tutor"
+			}
+		},
+		"status": "pending",
+		"requested_at": "2026-07-17T08:00:00.000Z",
+		"approved_at": null
+	}
+]
+```
+
+### 2.10. Student hủy đăng ký hoặc hủy yêu cầu đang chờ
+
+```http
+DELETE /api/courses/{course_id}/enroll
+Authorization: Bearer <student_access_token>
+```
+
+Response:
+
+```json
+{
+	"message": "Unenrolled from course successfully"
+}
+```
+
+### 2.11. Tutor/admin xem danh sách enrollment của khóa học
+
+- Tutor chỉ xem enrollment của khóa học mình sở hữu.
+- Admin xem được enrollment của mọi khóa học.
+- Nếu không truyền `status`, mặc định lấy `pending`.
+
+```http
+GET /api/courses/{course_id}/enrollments?status=pending
+Authorization: Bearer <access_token>
+```
+
+Giá trị `status` hợp lệ:
+
+```text
+pending | active
+```
+
+Response:
+
+```json
+[
+	{
+		"_id": "6870f8c90db5248718eb6e40",
+		"user_id": {
+			"_id": "6870f8c90db5248718eb6e33",
+			"full_name": "Student Example",
+			"email": "student@example.com",
+			"role": "student"
+		},
+		"course_id": "6870f8c90db5248718eb6e31",
+		"status": "pending",
+		"requested_at": "2026-07-17T08:00:00.000Z",
+		"approved_at": null
+	}
+]
+```
+
+### 2.12. Tutor/admin duyệt enrollment
+
+Tutor chỉ được duyệt yêu cầu của khóa học mình sở hữu. Sau khi duyệt, enrollment chuyển từ `pending` sang `active`.
+
+```http
+PATCH /api/courses/{course_id}/enrollments/{enrollment_id}/approve
+Authorization: Bearer <access_token>
+```
+
+Response:
+
+```json
+{
+	"message": "Enrollment approved successfully",
+	"enrollment": {
+		"_id": "6870f8c90db5248718eb6e40",
+		"status": "active",
+		"approved_at": "2026-07-17T08:05:00.000Z"
+	}
+}
+```
+
+### 2.13. Tutor/admin từ chối enrollment
+
+Chỉ được từ chối enrollment có trạng thái `pending`. Enrollment bị từ chối sẽ được xóa để student có thể gửi lại yêu cầu sau này.
+
+```http
+DELETE /api/courses/{course_id}/enrollments/{enrollment_id}
+Authorization: Bearer <access_token>
+```
+
+Response:
+
+```json
+{
+	"message": "Enrollment request rejected successfully"
 }
 ```
 
@@ -297,7 +564,7 @@ Response:
 
 ```json
 {
-	"detail": "Course not found"
+	"message": "Course not found"
 }
 ```
 
@@ -306,7 +573,18 @@ Response:
 401 Unauthorized
 403 Forbidden
 404 Not Found
+409 Conflict
+500 Internal Server Error
 ```
+
+| Status | Trường hợp |
+|---|---|
+| `400 Bad Request` | ObjectId không hợp lệ, `enrollment_type` hoặc `status` không hợp lệ |
+| `401 Unauthorized` | Thiếu access token hoặc token không hợp lệ/hết hạn |
+| `403 Forbidden` | Sai role hoặc tutor thao tác trên khóa học không thuộc quyền sở hữu |
+| `404 Not Found` | Không tìm thấy course hoặc enrollment |
+| `409 Conflict` | Đã đăng ký, yêu cầu đang pending, enrollment đã active hoặc cố từ chối enrollment active |
+| `500 Internal Server Error` | Lỗi database hoặc lỗi hệ thống ngoài dự kiến |
 
 ---
 
@@ -842,25 +1120,37 @@ Sau đó lấy `file_url` này lưu vào bảng `lessons.video_url` hoặc `less
 500 Internal Server Error
 ```
 
-### 7. Phân quyền API
+## 7. Phân quyền API
 
-Role Quyền
-student Xem khóa học, đăng ký/hủy đăng ký học, xem bài học, làm quiz, xem khóa học đã đăng ký, chat AI
-admin Tạo/sửa/xóa course, lesson, quiz, question, upload tài liệu, sinh quiz AI
+| Role | Quyền chính |
+|---|---|
+| `student` | Xem khóa học, đăng ký/hủy đăng ký, xem khóa học của mình, học lesson, làm quiz và chat AI |
+| `tutor` | Tạo khóa học; quản lý course, lesson, quiz và enrollment thuộc khóa học mình sở hữu |
+| `admin` | Quản lý tài khoản tutor và có quyền quản trị toàn bộ khóa học/hệ thống |
 
-Các API cần role admin:
+### 7.1. Phân quyền Course và Enrollment hiện tại
 
-POST /api/courses
-PUT /api/courses/{id}
-DELETE /api/courses/{id}
-POST /api/courses/{id}/lessons
-POST /api/courses/{id}/quizzes
-POST /api/quizzes/{id}/questions
-PUT /api/lessons/{lesson_id}
-DELETE /api/lessons/{lesson_id}
-PUT /api/quizzes/{quiz_id}
-DELETE /api/quizzes/{quiz_id}
-PUT /api/questions/{question_id}
-DELETE /api/questions/{question_id}
-POST /api/ai/generate-quiz
-POST /api/files/upload
+| Endpoint | Quyền |
+|---|---|
+| `GET /api/courses` | Public |
+| `GET /api/courses/{course_id}` | Public |
+| `POST /api/courses` | `tutor`, `admin` |
+| `PUT /api/courses/{course_id}` | Tutor sở hữu course hoặc `admin` |
+| `DELETE /api/courses/{course_id}` | Tutor sở hữu course hoặc `admin` |
+| `GET /api/courses/mine/deleted` | `tutor`, `admin` |
+| `PATCH /api/courses/{course_id}/restore` | Tutor sở hữu course hoặc `admin` |
+| `POST /api/courses/{course_id}/enroll` | `student` |
+| `DELETE /api/courses/{course_id}/enroll` | `student` |
+| `GET /api/users/me/courses` | `student` |
+| `GET /api/courses/{course_id}/enrollments` | Tutor sở hữu course hoặc `admin` |
+| `PATCH /api/courses/{course_id}/enrollments/{enrollment_id}/approve` | Tutor sở hữu course hoặc `admin` |
+| `DELETE /api/courses/{course_id}/enrollments/{enrollment_id}` | Tutor sở hữu course hoặc `admin` |
+
+### 7.2. Phân quyền quản lý tài khoản
+
+| Endpoint | Quyền |
+|---|---|
+| `GET /api/users` | `admin` |
+| `PATCH /api/users/{user_id}/status` | `admin` |
+
+Tài khoản tutor mới đăng ký có `account_status = pending`. Admin phải chuyển trạng thái sang `active` trước khi tutor có thể đăng nhập. Khi tutor bị chuyển sang `blocked`, các request sử dụng access token cũ cũng bị từ chối bởi middleware xác thực.
