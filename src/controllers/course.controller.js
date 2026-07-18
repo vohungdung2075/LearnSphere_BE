@@ -63,6 +63,7 @@ export const handleUpdateCourse = async (req, res) => {
 	} catch (error) {
 		if (error.message === "INVALID_COURSE_ID") return res.status(400).json({ message: "Invalid course ID format" }); 
 		if (error.message === "COURSE_NOT_FOUND") return res.status(404).json({ message: "Course not found" }); 
+		if (error.message === "NO_FIELDS_TO_UPDATE") return res.status(400).json({ message: "At least one field is required to update" });
 		if (error.message === "INVALID_COURSE_TITLE") return res.status(400).json({ message: "Invalid course title format" }); 
 		if (error.message === "INVALID_ENROLLMENT_TYPE") return res.status(400).json({ message: "Invalid course enrollment-type" }); 
 		if (error.message === "INVALID_DESCRIPTION") return res.status(400).json({ message: "Description must be a string" });

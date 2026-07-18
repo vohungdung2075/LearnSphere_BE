@@ -1,0 +1,190 @@
+import mongoose from "mongoose";
+import Lesson from "../models/Lesson.model.js";
+import Course from "../models/Course.model.js";
+import Enrollment from "../models/Enrollment.model.js";
+import LessonProgress from "../models/LessonProgress.model.js";
+
+const verifyAccessPermission = async (course, userId, userRole) => {
+	if (userRole === "admin") return;
+
+	if (userRole === "tutor") {
+		const isOwner = course.created_by.toString() === userId.toString();
+		if (!isOwner) throw new Error("FORBIDDEN_LESSON_ACTION");
+		return;
+	}
+
+	if (userRole === "student") {
+		const enrollment = await Enrollment.findOne({
+			user_id: userId,
+			course_id: course._id,
+			status: "active", 
+		});
+		if (!enrollment) throw new Error("ACTIVE_ENROLLMENT_REQUIRED");
+		return;
+	}
+
+	throw new Error("FORBIDDEN_LESSON_ACTION");
+};
+
+
+export const createLesson = async (courseId, { title, content, video_url, document_url, order_index }, userId, userRole) => {
+	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
+
+	const course = await Course.findOne({ _id: courseId, is_deleted: false });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	const isOwner = course.created_by.toString() === userId.toString();
+	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_LESSON_ACTION");
+
+	if (typeof title !== "string" || !title.trim()) throw new Error("INVALID_LESSON_TITLE");
+	if (content !== undefined && typeof content !== "string") throw new Error("INVALID_CONTENT");
+	if (video_url !== undefined && typeof video_url !== "string") throw new Error("INVALID_VIDEO_URL");
+	if (document_url !== undefined && typeof document_url !== "string") throw new Error("INVALID_DOCUMENT_URL");
+	if (typeof order_index !== "number" || order_index < 1 || !Number.isInteger(order_index)) {
+		throw new Error("INVALID_ORDER_INDEX");
+	}
+
+	const newLesson = await Lesson.create({
+        course_id: courseId,
+		title: title.trim(),
+		content: content ? content.trim() : "",
+		video_url: video_url ? video_url.trim() : "",
+		document_url: document_url ? document_url.trim() : "",
+		order_index: order_index,
+	});
+	return newLesson;
+};
+
+
+export const getCourseLessons = async (courseId, userId, userRole) => {
+	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
+
+	const course = await Course.findOne({ _id: courseId, is_deleted: false });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	await verifyAccessPermission(course, userId, userRole);
+
+	return await Lesson.find({ course_id: courseId }).sort({ order_index: 1 });
+};
+
+
+export const getLessonById = async (lessonId, userId, userRole) => {
+	if (!mongoose.isValidObjectId(lessonId)) throw new Error("INVALID_LESSON_ID");
+
+	const lesson = await Lesson.findById(lessonId);
+	if (!lesson) throw new Error("LESSON_NOT_FOUND");
+
+	const course = await Course.findOne({ _id: lesson.course_id, is_deleted: false });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	await verifyAccessPermission(course, userId, userRole);
+
+	return lesson;
+};
+
+
+export const updateLesson = async (lessonId, { title, content, video_url, document_url, order_index }, userId, userRole) => {
+	if (!mongoose.isValidObjectId(lessonId)) throw new Error("INVALID_LESSON_ID");
+
+	const lesson = await Lesson.findById(lessonId);
+	if (!lesson) throw new Error("LESSON_NOT_FOUND");
+
+	const course = await Course.findOne({ _id: lesson.course_id, is_deleted: false });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	const isOwner = course.created_by.toString() === userId.toString();
+	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_LESSON_ACTION");
+
+	if (title === undefined && content === undefined && video_url === undefined && document_url === undefined && order_index === undefined) {
+		throw new Error("NO_FIELDS_TO_UPDATE");
+	}
+
+	if (title !== undefined && (typeof title !== "string" || !title.trim())) throw new Error("INVALID_LESSON_TITLE");
+	if (content !== undefined && typeof content !== "string") throw new Error("INVALID_CONTENT");
+	if (video_url !== undefined && typeof video_url !== "string") throw new Error("INVALID_VIDEO_URL");
+	if (document_url !== undefined && typeof document_url !== "string") throw new Error("INVALID_DOCUMENT_URL");
+	if (order_index !== undefined && (typeof order_index !== "number" || order_index < 1 || !Number.isInteger(order_index))) {
+		throw new Error("INVALID_ORDER_INDEX");
+	}
+
+	if (title) lesson.title = title.trim();
+	if (content !== undefined) lesson.content = content.trim();
+	if (video_url !== undefined) lesson.video_url = video_url.trim();
+	if (document_url !== undefined) lesson.document_url = document_url.trim();
+	if (order_index) lesson.order_index = order_index;
+	return await lesson.save();
+};
+
+
+export const deleteLesson = async (lessonId, userId, userRole) => {
+	if (!mongoose.isValidObjectId(lessonId)) throw new Error("INVALID_LESSON_ID");
+
+	const lesson = await Lesson.findById(lessonId);
+	if (!lesson) throw new Error("LESSON_NOT_FOUND");
+
+	const course = await Course.findOne({ _id: lesson.course_id, is_deleted: false });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	const isOwner = course.created_by.toString() === userId.toString();
+	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_LESSON_ACTION");
+
+	await LessonProgress.deleteMany({ lesson_id: lesson._id });
+	await lesson.deleteOne();
+
+	return { message: "Lesson deleted successfully" };
+};
+
+
+export const completeLesson = async (lessonId, studentId) => {
+	if (!mongoose.isValidObjectId(lessonId)) throw new Error("INVALID_LESSON_ID");
+
+	const lesson = await Lesson.findById(lessonId);
+	if (!lesson) throw new Error("LESSON_NOT_FOUND");
+
+	const course = await Course.findOne({ _id: lesson.course_id, is_deleted: false });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	const enrollment = await Enrollment.findOne({ user_id: studentId, course_id: course._id, status: "active" });
+	if (!enrollment) throw new Error("ACTIVE_ENROLLMENT_REQUIRED");
+
+	const progress = await LessonProgress.findOneAndUpdate(
+		{ user_id: studentId, lesson_id: lesson._id },
+		{
+			$set: {
+				course_id: lesson.course_id,
+				is_completed: true,
+				completed_at: new Date(),
+			},
+		},
+		{ new: true, upsert: true, setDefaultsOnInsert: true },
+	);
+	return progress;
+};
+
+
+export const getCourseProgress = async (courseId, studentId) => {
+	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
+
+	const course = await Course.findOne({ _id: courseId, is_deleted: false });
+	if (!course) throw new Error("COURSE_NOT_FOUND");
+
+	const enrollment = await Enrollment.findOne({ user_id: studentId, course_id: courseId, status: "active" });
+	if (!enrollment) throw new Error("ACTIVE_ENROLLMENT_REQUIRED");
+
+	const totalLessons = await Lesson.countDocuments({ course_id: courseId });
+	if (totalLessons === 0) return { course_id: courseId, progress_percent: 0, completed_lessons: 0, total_lessons: 0 };
+
+	const completedLessons = await LessonProgress.countDocuments({
+		user_id: studentId,
+		course_id: courseId,
+		is_completed: true,
+	});
+
+	const progressPercent = Math.round((completedLessons / totalLessons) * 100);
+	return {
+		course_id: courseId,
+		progress_percent: progressPercent,
+		completed_lessons: completedLessons,
+		total_lessons: totalLessons,
+	};
+};

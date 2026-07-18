@@ -27,13 +27,15 @@ const LessonSchema = new mongoose.Schema(
 		},
 		order_index: {
 			type: Number,
-			default: 0,
+			required: true,
+			min: 1,
+			validate: Number.isInteger,
 		},
 	},
 	{ timestamps: true },
 );
 
-LessonSchema.index({ course_id: 1, order_index: 1 });
+LessonSchema.index( { course_id: 1, order_index: 1 }, { unique: true } );
 
 const Lesson = mongoose.model("Lesson", LessonSchema);
 export default Lesson;

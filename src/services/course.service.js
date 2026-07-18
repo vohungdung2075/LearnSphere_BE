@@ -49,6 +49,10 @@ export const updateCourse = async (courseId, { title, description, thumbnail_url
 	const isOwner = course.created_by.toString() === userId.toString();
 	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_COURSE_ACTION");
     
+	if (title === undefined && description === undefined && thumbnail_url === undefined && enrollment_type === undefined) {
+		throw new Error("NO_FIELDS_TO_UPDATE");
+	}
+
 	if (title !== undefined && (typeof title !== "string" || !title.trim())) throw new Error("INVALID_COURSE_TITLE");
     if (description !== undefined && typeof description !== "string") throw new Error("INVALID_DESCRIPTION");
 	if (thumbnail_url !== undefined && typeof thumbnail_url !== "string") throw new Error("INVALID_THUMBNAIL_URL");

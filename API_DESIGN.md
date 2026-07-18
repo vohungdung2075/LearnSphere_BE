@@ -590,22 +590,38 @@ Response:
 
 ## 3. Lesson API
 
+Tất cả Lesson API đều yêu cầu đăng nhập.
+
+Quy tắc truy cập:
+
+- Student chỉ được xem lesson, hoàn thành lesson và xem tiến độ khi enrollment của course có trạng thái `active`.
+- Tutor chỉ được xem và quản lý lesson thuộc course do mình sở hữu.
+- Admin được xem và quản lý lesson của mọi course.
+- Course đã bị xóa mềm không thể truy cập hoặc quản lý lesson.
+
 ### 3.1. Lấy danh sách bài học theo khóa học
 
 ```http
 GET /api/courses/{course_id}/lessons
+Authorization: Bearer <access_token>
 ```
+
+Danh sách được sắp xếp tăng dần theo `order_index`.
 
 Response:
 
 ```json
 [
 	{
-		"id": 1,
+		"_id": "6870f8c90db5248718eb6f01",
+		"course_id": "6870f8c90db5248718eb6e31",
 		"title": "Introduction to Cloud Computing",
+		"content": "Cloud computing is...",
 		"video_url": "https://s3.amazonaws.com/video.mp4",
 		"document_url": "https://s3.amazonaws.com/document.pdf",
-		"order_index": 1
+		"order_index": 1,
+		"createdAt": "2026-07-18T08:00:00.000Z",
+		"updatedAt": "2026-07-18T08:00:00.000Z"
 	}
 ]
 ```
@@ -614,14 +630,32 @@ Response:
 
 ```http
 GET /api/lessons/{lesson_id}
+Authorization: Bearer <access_token>
+```
+
+Response:
+
+```json
+{
+	"_id": "6870f8c90db5248718eb6f01",
+	"course_id": "6870f8c90db5248718eb6e31",
+	"title": "Introduction to Cloud Computing",
+	"content": "Cloud computing is...",
+	"video_url": "https://s3.amazonaws.com/video.mp4",
+	"document_url": "https://s3.amazonaws.com/document.pdf",
+	"order_index": 1,
+	"createdAt": "2026-07-18T08:00:00.000Z",
+	"updatedAt": "2026-07-18T08:00:00.000Z"
+}
 ```
 
 ### 3.3. Tạo bài học
 
-Dành cho `admin`.
+Dành cho tutor sở hữu course hoặc admin.
 
 ```http
 POST /api/courses/{course_id}/lessons
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -636,41 +670,86 @@ Request:
 }
 ```
 
+Ràng buộc:
+
+- `title` là chuỗi bắt buộc và không được rỗng.
+- `order_index` là số nguyên dương bắt buộc.
+- Mỗi `order_index` chỉ xuất hiện một lần trong cùng một course.
+- `content`, `video_url`, `document_url` là chuỗi không bắt buộc.
+
+Response:
+
+```json
+{
+	"message": "Lesson created successfully",
+	"lesson": {
+		"_id": "6870f8c90db5248718eb6f01",
+		"course_id": "6870f8c90db5248718eb6e31",
+		"title": "Introduction to Cloud Computing",
+		"content": "Cloud computing is...",
+		"video_url": "https://s3.amazonaws.com/video.mp4",
+		"document_url": "https://s3.amazonaws.com/document.pdf",
+		"order_index": 1
+	}
+}
+```
+
 ### 3.4. Đánh dấu đã hoàn thành bài học
+
+Chỉ dành cho student có enrollment `active` trong course chứa lesson.
 
 ```http
 POST /api/lessons/{lesson_id}/complete
+Authorization: Bearer <student_access_token>
 ```
 
 Response:
 
 ```json
 {
-	"message": "Lesson completed"
+	"message": "Lesson marked as completed successfully",
+	"progress": {
+		"_id": "6870f8c90db5248718eb6f10",
+		"user_id": "6870f8c90db5248718eb6e33",
+		"course_id": "6870f8c90db5248718eb6e31",
+		"lesson_id": "6870f8c90db5248718eb6f01",
+		"is_completed": true,
+		"completed_at": "2026-07-18T08:30:00.000Z"
+	}
 }
 ```
+
+API sử dụng upsert nên một student chỉ có một progress document cho mỗi lesson.
 
 ### 3.5. Lấy tiến độ học tập của khóa học
 
+Chỉ dành cho student có enrollment `active`.
+
 ```http
 GET /api/courses/{course_id}/progress
+Authorization: Bearer <student_access_token>
 ```
 
 Response:
 
 ```json
 {
-	"course_id": 1,
+	"course_id": "6870f8c90db5248718eb6e31",
+	"progress_percent": 30,
 	"completed_lessons": 3,
-	"total_lessons": 10,
-	"progress_percent": 30
+	"total_lessons": 10
 }
 ```
 
+Nếu course chưa có lesson, `progress_percent`, `completed_lessons` và `total_lessons` đều bằng `0`.
+
 ### 3.6. Cập nhật bài học
+
+Dành cho tutor sở hữu course hoặc admin. Có thể cập nhật từng trường độc lập, nhưng body phải chứa ít nhất một trường hợp lệ.
 
 ```http
 PUT /api/lessons/{lesson_id}
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -685,10 +764,30 @@ Request:
 }
 ```
 
+Response:
+
+```json
+{
+	"message": "Lesson updated successfully",
+	"lesson": {
+		"_id": "6870f8c90db5248718eb6f01",
+		"course_id": "6870f8c90db5248718eb6e31",
+		"title": "Introduction to AWS Cloud",
+		"content": "Updated lesson content...",
+		"video_url": "https://s3.amazonaws.com/video-new.mp4",
+		"document_url": "https://s3.amazonaws.com/document-new.pdf",
+		"order_index": 2
+	}
+}
+```
+
 ### 3.7. Xóa bài học
+
+Dành cho tutor sở hữu course hoặc admin. Lesson bị xóa cứng và tất cả progress liên quan cũng bị xóa.
 
 ```http
 DELETE /api/lessons/{lesson_id}
+Authorization: Bearer <access_token>
 ```
 
 Response:
@@ -703,7 +802,7 @@ Response:
 
 ```json
 {
-	"detail": "Lesson not found"
+	"message": "Resource not found"
 }
 ```
 
@@ -712,7 +811,18 @@ Response:
 401 Unauthorized
 403 Forbidden
 404 Not Found
+409 Conflict
+500 Internal Server Error
 ```
+
+| Status | Trường hợp |
+|---|---|
+| `400 Bad Request` | Course/Lesson ObjectId không hợp lệ; title, content, URL hoặc order index không hợp lệ; update body rỗng |
+| `401 Unauthorized` | Thiếu access token hoặc token không hợp lệ/hết hạn |
+| `403 Forbidden` | Sai role, tutor không sở hữu course hoặc student chưa có enrollment active |
+| `404 Not Found` | Không tìm thấy course/lesson hoặc course đã bị xóa mềm |
+| `409 Conflict` | `order_index` đã tồn tại trong cùng course |
+| `500 Internal Server Error` | Lỗi database hoặc lỗi hệ thống ngoài dự kiến |
 
 ---
 
@@ -1154,3 +1264,15 @@ Sau đó lấy `file_url` này lưu vào bảng `lessons.video_url` hoặc `less
 | `PATCH /api/users/{user_id}/status` | `admin` |
 
 Tài khoản tutor mới đăng ký có `account_status = pending`. Admin phải chuyển trạng thái sang `active` trước khi tutor có thể đăng nhập. Khi tutor bị chuyển sang `blocked`, các request sử dụng access token cũ cũng bị từ chối bởi middleware xác thực.
+
+### 7.3. Phân quyền Lesson và Progress hiện tại
+
+| Endpoint | Quyền |
+|---|---|
+| `GET /api/courses/{course_id}/lessons` | Student enrollment active, tutor sở hữu course hoặc `admin` |
+| `GET /api/lessons/{lesson_id}` | Student enrollment active, tutor sở hữu course hoặc `admin` |
+| `POST /api/courses/{course_id}/lessons` | Tutor sở hữu course hoặc `admin` |
+| `PUT /api/lessons/{lesson_id}` | Tutor sở hữu course hoặc `admin` |
+| `DELETE /api/lessons/{lesson_id}` | Tutor sở hữu course hoặc `admin` |
+| `POST /api/lessons/{lesson_id}/complete` | Student enrollment active |
+| `GET /api/courses/{course_id}/progress` | Student enrollment active |
