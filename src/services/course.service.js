@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Course from "../models/Course.model.js";
+import QuizAttempt from "../models/QuizAttempt.model.js";
 
 export const createCourse = async ( { title, description, thumbnail_url, enrollment_type }, creatorId ) => {
 	const allowedEnrollmentTypes = ["open", "approval_required"];
@@ -80,6 +81,13 @@ export const deleteCourse = async (courseId, userId, userRole) => {
 
 	const isOwner = course.created_by.toString() === userId.toString();
 	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_COURSE_ACTION"); 
+
+	const activeAttempt = await QuizAttempt.exists({
+		course_id: course._id,
+		status: "in_progress",
+		expires_at: { $gt: new Date() },
+	});
+	if (activeAttempt) throw new Error("COURSE_HAS_ACTIVE_QUIZ_ATTEMPTS");
 
 	course.is_deleted = true;
 	course.deleted_at = new Date();

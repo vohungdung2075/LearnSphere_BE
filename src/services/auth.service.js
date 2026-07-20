@@ -28,7 +28,9 @@ export const signup = async (full_name, email, password, role) => {
 		account_status: authenStatus,
 	});
 
-	const accessToken = newUser.account_status === "active" ? generateToken(newUser._id.toString()) : null;
+	const accessToken = newUser.account_status === "active"
+		? generateToken(newUser._id.toString(), newUser.token_version)
+		: null;
 
 	return {
 		message: "Register successfully",
@@ -60,7 +62,7 @@ export const login = async (email, password) => {
 	if (user.account_status === "pending") throw new Error("ACCOUNT_PENDING");
 	if (user.account_status === "blocked") throw new Error("ACCOUNT_BLOCKED");
 
-	const accessToken = generateToken(user._id.toString());
+	const accessToken = generateToken(user._id.toString(), user.token_version ?? 0);
 
 	return {
 		access_token: accessToken,
@@ -127,6 +129,7 @@ export const resetPassword = async (token, new_password) => {
 	if (!user) throw new Error("INVALID_OR_EXPIRED_RESET_TOKEN");
 
 	user.password_hash = await bcrypt.hash(new_password, 10);
+	user.token_version = (user.token_version ?? 0) + 1;
 	user.reset_password_token = null;
 	user.reset_password_expires = null;
 

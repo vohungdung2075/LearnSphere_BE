@@ -9,6 +9,23 @@ const checkActiveAttemptsExist = async (quizId) => {
 	if (hasActiveAttempt) throw new Error("QUIZ_HAS_ACTIVE_ATTEMPTS");
 };
 
+const formatStartAttempt = (attempt, quiz) => ({
+	attempt_id: attempt._id,
+	started_at: attempt.started_at,
+	expires_at: attempt.expires_at,
+	time_limit: quiz.time_limit,
+	questions: quiz.questions.map((question) => ({
+		_id: question._id,
+		content: question.content,
+		question_type: question.question_type,
+		point: question.point,
+		answers: question.answers.map((answer) => ({
+			_id: answer._id,
+			content: answer.content,
+		})),
+	})),
+});
+
 
 export const createQuiz = async (courseId, { title, description, time_limit }, userId, userRole) => {
 	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
@@ -262,59 +279,46 @@ export const startQuiz = async (quizId, studentId) => {
 	const existingAttempt = await QuizAttempt.findOne({ user_id: studentId, quiz_id: quiz._id, status: "in_progress" });
 
 	if (existingAttempt) {
-		// Nếu đã hết hạn thì đánh dấu expired
 		if (new Date() > existingAttempt.expires_at) {
 			existingAttempt.status = "expired";
 			await existingAttempt.save();
 		} else {
-			// Nếu vẫn còn thời gian, trả về đúng attempt đang dở dang
-			return {
-				attempt_id: existingAttempt._id,
-				started_at: existingAttempt.started_at,
-				expires_at: existingAttempt.expires_at,
-				time_limit: quiz.time_limit,
-				questions: quiz.questions.map((q) => ({
-					_id: q._id,
-					content: q.content,
-					question_type: q.question_type,
-					point: q.point,
-					answers: q.answers.map((a) => ({ _id: a._id, content: a.content })),
-				})),
-			};
+			return formatStartAttempt(existingAttempt, quiz);
 		}
 	}
 
 	const now = new Date();
 	const expiresAt = new Date(now.getTime() + quiz.time_limit * 60 * 1000);
 
-	const newAttempt = await QuizAttempt.create({
-		user_id: studentId,
-		quiz_id: quiz._id,
-		course_id: quiz.course_id,
-		status: "in_progress",
-		started_at: now, 
-		expires_at: expiresAt, 
-		score: 0,
-		total_score: 0,
-		correct_answers: 0,
-		total_questions: quiz.questions.length,
-	});
+	try {
+		const newAttempt = await QuizAttempt.create({
+			user_id: studentId,
+			quiz_id: quiz._id,
+			course_id: quiz.course_id,
+			status: "in_progress",
+			started_at: now,
+			expires_at: expiresAt,
+			score: 0,
+			total_score: 0,
+			correct_answers: 0,
+			total_questions: quiz.questions.length,
+		});
 
-	const questionsForStudent = quiz.questions.map((q) => ({
-		_id: q._id,
-		content: q.content,
-		question_type: q.question_type,
-		point: q.point,
-		answers: q.answers.map((a) => ({ _id: a._id, content: a.content })),
-	}));
+		return formatStartAttempt(newAttempt, quiz);
+	} catch (error) {
+		if (error.code === 11000) {
+			const concurrentAttempt = await QuizAttempt.findOne({
+				user_id: studentId,
+				quiz_id: quiz._id,
+				status: "in_progress",
+				expires_at: { $gt: new Date() },
+			});
 
-	return {
-		attempt_id: newAttempt._id, 
-		started_at: newAttempt.started_at, 
-		expires_at: newAttempt.expires_at, 
-		time_limit: quiz.time_limit, 
-		questions: questionsForStudent, 
-	};
+			if (concurrentAttempt) return formatStartAttempt(concurrentAttempt, quiz);
+		}
+
+		throw error;
+	}
 };
 
 export const submitQuiz = async (attemptId, submittedAnswers, studentId) => {
@@ -327,12 +331,21 @@ export const submitQuiz = async (attemptId, submittedAnswers, studentId) => {
 
 	if (attempt.user_id.toString() !== studentId.toString()) throw new Error("ATTEMPT_ACCESS_DENIED");
 
-    if (attempt.status === "submitted") throw new Error("ATTEMPT_ALREADY_SUBMITTED");
+	if (attempt.status === "submitted") throw new Error("ATTEMPT_ALREADY_SUBMITTED");
 	if (attempt.status === "expired") throw new Error("QUIZ_TIME_EXPIRED");
 
 	if (submittedAt > attempt.expires_at) {
-		attempt.status = "expired";
-		await attempt.save();
+		const expiredAttempt = await QuizAttempt.findOneAndUpdate(
+			{ _id: attempt._id, user_id: studentId, status: "in_progress" },
+			{ $set: { status: "expired" } },
+			{ new: true },
+		);
+
+		if (!expiredAttempt) {
+			const currentAttempt = await QuizAttempt.findById(attempt._id).select("status");
+			if (currentAttempt?.status === "submitted") throw new Error("ATTEMPT_ALREADY_SUBMITTED");
+		}
+
 		throw new Error("QUIZ_TIME_EXPIRED");
 	}
 
@@ -424,25 +437,45 @@ export const submitQuiz = async (attemptId, submittedAnswers, studentId) => {
 	}
 
 	const durationSeconds = Math.max(0, Math.floor((submittedAt.getTime() - attempt.started_at.getTime()) / 1000));
-	attempt.status = "submitted"; 
-	attempt.score = score;
-	attempt.total_score = totalScore;
-	attempt.correct_answers = correctAnswersCount;
-	attempt.submitted_at = submittedAt;
-	attempt.duration_seconds = durationSeconds;
-	attempt.answers = attemptAnswers;
+	const submittedAttempt = await QuizAttempt.findOneAndUpdate(
+		{
+			_id: attempt._id,
+			user_id: studentId,
+			status: "in_progress",
+			expires_at: { $gte: submittedAt },
+		},
+		{
+			$set: {
+				status: "submitted",
+				score,
+				total_score: totalScore,
+				correct_answers: correctAnswersCount,
+				submitted_at: submittedAt,
+				duration_seconds: durationSeconds,
+				answers: attemptAnswers,
+			},
+		},
+		{ new: true, runValidators: true },
+	);
 
-	await attempt.save();
+	if (!submittedAttempt) {
+		const currentAttempt = await QuizAttempt.findById(attempt._id).select("status expires_at");
+		if (!currentAttempt) throw new Error("ATTEMPT_NOT_FOUND");
+		if (currentAttempt.status === "expired" || submittedAt > currentAttempt.expires_at) {
+			throw new Error("QUIZ_TIME_EXPIRED");
+		}
+		throw new Error("ATTEMPT_ALREADY_SUBMITTED");
+	}
 
 	return {
-		attempt_id: attempt._id,
-		status: attempt.status,
-		score: attempt.score,
-		total_score: attempt.total_score,
-		correct_answers: attempt.correct_answers,
-		total_questions: attempt.total_questions,
-		duration_seconds: attempt.duration_seconds, 
-		submitted_at: attempt.submitted_at,
+		attempt_id: submittedAttempt._id,
+		status: submittedAttempt.status,
+		score: submittedAttempt.score,
+		total_score: submittedAttempt.total_score,
+		correct_answers: submittedAttempt.correct_answers,
+		total_questions: submittedAttempt.total_questions,
+		duration_seconds: submittedAttempt.duration_seconds,
+		submitted_at: submittedAttempt.submitted_at,
 	};
 };
 
@@ -467,6 +500,11 @@ export const getQuizAttempts = async (quizId, userId, userRole) => {
 		if (!isOwner) throw new Error("FORBIDDEN_QUIZ_ACTION");
 	}
 
+	await QuizAttempt.updateMany(
+		{ ...filter, status: "in_progress", expires_at: { $lte: new Date() } },
+		{ $set: { status: "expired" } },
+	);
+
 	return await QuizAttempt.find(filter)
 		.populate("user_id", "full_name email")
 		.sort({ submitted_at: -1 });
@@ -478,8 +516,6 @@ export const getAttemptById = async (attemptId, userId, userRole) => {
 
 	const attempt = await QuizAttempt.findById(attemptId).populate("user_id", "full_name email");
 	if (!attempt) throw new Error("ATTEMPT_NOT_FOUND");
-
-	if (userRole === "admin") return attempt;
 
 	if (userRole === "student") {
 		if (!attempt.user_id || attempt.user_id._id.toString() !== userId.toString()) {
@@ -495,5 +531,14 @@ export const getAttemptById = async (attemptId, userId, userRole) => {
 			throw new Error("ATTEMPT_ACCESS_DENIED");
 		}
 	}
+
+	if (attempt.status === "in_progress" && attempt.expires_at <= new Date()) {
+		await QuizAttempt.updateOne(
+			{ _id: attempt._id, status: "in_progress" },
+			{ $set: { status: "expired" } },
+		);
+		attempt.status = "expired";
+	}
+
 	return attempt;
 };

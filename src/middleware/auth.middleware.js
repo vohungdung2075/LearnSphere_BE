@@ -18,6 +18,10 @@ export const protect = async (req, res, next) => {
 			return res.status(401).json({ message: "Unauthorized - User no longer exists" });
 		}
 
+		if (decoded.token_version !== req.user.token_version) {
+			return res.status(401).json({ message: "Unauthorized - Token has been revoked" });
+		}
+
 		if (req.user.account_status !== "active") {
 			return res.status(403).json({ message: `Forbidden - Account is ${req.user.account_status}` });
 		}

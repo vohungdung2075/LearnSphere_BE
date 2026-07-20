@@ -121,7 +121,14 @@ const QuizAttemptSchema = new mongoose.Schema(
 	{ timestamps: true },
 );
 
-QuizAttemptSchema.index({ user_id: 1, quiz_id: 1 }); 
+QuizAttemptSchema.index(
+	{ user_id: 1, quiz_id: 1, status: 1 },
+	{
+		name: "unique_active_attempt_per_student_quiz",
+		unique: true,
+		partialFilterExpression: { status: "in_progress" },
+	},
+);
 
 const QuizAttempt = mongoose.model("QuizAttempt", QuizAttemptSchema);
 export default QuizAttempt;

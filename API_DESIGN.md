@@ -146,7 +146,7 @@ Response:
 }
 ```
 
-Sau khi đặt lại mật khẩu thành công, reset token bị xóa và không thể sử dụng lại.
+Sau khi đặt lại mật khẩu thành công, reset token bị xóa và không thể sử dụng lại. Hệ thống đồng thời tăng `token_version`, vì vậy tất cả access token được cấp trước thời điểm reset mật khẩu đều bị thu hồi và nhận `401 Unauthorized` ở request tiếp theo.
 
 ### Error response thường gặp
 
@@ -336,6 +336,8 @@ Các trường đều có thể cập nhật độc lập.
 ### 2.5. Xóa mềm khóa học
 
 Dành cho tutor sở hữu khóa học hoặc admin. Dữ liệu không bị xóa khỏi MongoDB mà được chuyển vào thùng rác.
+
+Không thể xóa course khi còn quiz attempt `in_progress` chưa hết hạn trong course đó.
 
 ```http
 DELETE /api/courses/{course_id}
@@ -583,7 +585,7 @@ Response:
 | `401 Unauthorized` | Thiếu access token hoặc token không hợp lệ/hết hạn |
 | `403 Forbidden` | Sai role hoặc tutor thao tác trên khóa học không thuộc quyền sở hữu |
 | `404 Not Found` | Không tìm thấy course hoặc enrollment |
-| `409 Conflict` | Đã đăng ký, yêu cầu đang pending, enrollment đã active hoặc cố từ chối enrollment active |
+| `409 Conflict` | Đã đăng ký, yêu cầu đang pending, enrollment đã active, cố từ chối enrollment active hoặc xóa course khi student đang làm quiz |
 | `500 Internal Server Error` | Lỗi database hoặc lỗi hệ thống ngoài dự kiến |
 
 ---
@@ -1026,7 +1028,7 @@ started_at = thời điểm bắt đầu
 expires_at = started_at + time_limit
 ```
 
-Nếu student gọi lại endpoint khi vẫn còn một attempt `in_progress` chưa hết hạn, backend trả lại attempt đang làm thay vì tạo attempt mới. Nếu attempt cũ đã hết hạn, backend chuyển trạng thái của attempt đó thành `expired` rồi tạo attempt mới.
+Nếu student gọi lại endpoint khi vẫn còn một attempt `in_progress` chưa hết hạn, backend trả lại attempt đang làm thay vì tạo attempt mới. Nếu attempt cũ đã hết hạn, backend chuyển trạng thái của attempt đó thành `expired` rồi tạo attempt mới. Unique partial index và xử lý duplicate key bảo đảm mỗi student chỉ có tối đa một attempt `in_progress` cho một quiz, kể cả khi nhiều request `/start` đến đồng thời.
 
 Response:
 
@@ -1121,6 +1123,7 @@ Response:
 
 - Student chỉ xem attempt của chính mình và phải còn enrollment `active`.
 - Tutor sở hữu course và admin xem được attempt của các student.
+- Trước khi trả kết quả, backend tự chuyển các attempt `in_progress` đã quá `expires_at` thành `expired`.
 
 ```http
 GET /api/quizzes/{quiz_id}/attempts

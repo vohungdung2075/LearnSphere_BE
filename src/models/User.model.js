@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema(
 			enum: ["pending", "active", "blocked"],
 			default: "active",
 		},
+		token_version: {
+			type: Number,
+			default: 0,
+			min: 0,
+		},
 		reset_password_token: {
 			type: String,
 			default: null,

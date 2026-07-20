@@ -85,6 +85,7 @@ export const handleDeleteCourse = async (req, res) => {
 		if (error.message === "INVALID_COURSE_ID") return res.status(400).json({ message: "Invalid course ID format" });
 		if (error.message === "COURSE_NOT_FOUND") return res.status(404).json({ message: "Course not found" });
 		if (error.message === "FORBIDDEN_COURSE_ACTION") return res.status(403).json({ message: "Forbidden - You do not have permission to delete this course" });
+		if (error.message === "COURSE_HAS_ACTIVE_QUIZ_ATTEMPTS") return res.status(409).json({ message: "Course cannot be deleted while students are taking its quizzes" });
 
 		console.error("Delete course error:", error);
 		return res.status(500).json({ message: "Internal server error" });
