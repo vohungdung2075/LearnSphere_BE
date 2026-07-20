@@ -1,18 +1,48 @@
 import mongoose from "mongoose";
 
+const SelectedAnswerSchema = new mongoose.Schema(
+	{
+		answer_id: {
+			type: mongoose.Schema.Types.ObjectId,
+			required: true,
+		},
+		content: {
+			type: String,
+			required: true,
+			trim: true,
+		},
+	},
+	{ _id: false },
+);
+
 const AttemptAnswerSchema = new mongoose.Schema(
 	{
 		question_id: {
 			type: mongoose.Schema.Types.ObjectId,
 			required: true,
 		},
-		answer_id: {
-			type: mongoose.Schema.Types.ObjectId,
+		question_content: {
+			type: String,
 			required: true,
+			trim: true,
+		},
+		selected_answers: {
+			type: [SelectedAnswerSchema],
+			default: [],
 		},
 		is_correct: {
 			type: Boolean,
 			required: true,
+		},
+		earned_point: {
+			type: Number,
+			default: 0,
+			min: 0,
+		},
+		max_point: {
+			type: Number,
+			required: true,
+			min: 0,
 		},
 	},
 	{ _id: false },
@@ -32,19 +62,56 @@ const QuizAttemptSchema = new mongoose.Schema(
 			required: true,
 			index: true,
 		},
+		course_id: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "Course",
+			required: true,
+			index: true,
+		},
+		status: {
+			type: String,
+			enum: ["in_progress", "submitted", "expired"],
+			default: "in_progress",
+			required: true,
+		},
+		started_at: {
+			type: Date,
+			required: true,
+		},
+		expires_at: {
+			type: Date,
+			required: true,
+		},
+		submitted_at: {
+			type: Date,
+			default: null,
+		},
+		duration_seconds: {
+			type: Number,
+			default: null,
+			min: 0,
+		},
 		score: {
 			type: Number,
 			required: true,
 			default: 0,
+			min: 0,
 		},
 		total_score: {
 			type: Number,
 			required: true,
 			default: 0,
+			min: 0,
 		},
-		submitted_at: {
-			type: Date,
-			default: Date.now,
+		correct_answers: {
+			type: Number,
+			default: 0,
+			min: 0,
+		},
+		total_questions: {
+			type: Number,
+			default: 0,
+			min: 0,
 		},
 		answers: {
 			type: [AttemptAnswerSchema],
@@ -54,7 +121,7 @@ const QuizAttemptSchema = new mongoose.Schema(
 	{ timestamps: true },
 );
 
-QuizAttemptSchema.index({ user_id: 1, quiz_id: 1 });
+QuizAttemptSchema.index({ user_id: 1, quiz_id: 1 }); 
 
 const QuizAttempt = mongoose.model("QuizAttempt", QuizAttemptSchema);
 export default QuizAttempt;

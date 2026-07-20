@@ -828,18 +828,47 @@ Response:
 
 ## 4. Quiz API
 
+Tất cả Quiz API đều yêu cầu đăng nhập.
+
+Quy tắc truy cập:
+
+- Student chỉ được xem danh sách quiz, bắt đầu quiz, nộp bài và xem attempt khi có enrollment `active` trong course.
+- Tutor chỉ được xem và quản lý quiz thuộc course do mình sở hữu.
+- Admin được xem và quản lý quiz của mọi course.
+- Student chỉ nhận câu hỏi từ API bắt đầu quiz; response không chứa trường `is_correct`.
+- Backend dùng thời gian server để tạo `started_at` và `expires_at`, đồng thời từ chối bài nộp sau khi hết thời gian.
+- Khi còn attempt `in_progress` chưa hết hạn, tutor/admin không được sửa hoặc xóa quiz, câu hỏi và đáp án.
+
 ### 4.1. Lấy danh sách quiz của khóa học
 
 ```http
 GET /api/courses/{course_id}/quizzes
+Authorization: Bearer <access_token>
+```
+
+Response không chứa mảng `questions`:
+
+```json
+[
+	{
+		"_id": "6870f8c90db5248718eb7101",
+		"course_id": "6870f8c90db5248718eb6e31",
+		"title": "AWS Quiz 1",
+		"description": "Kiểm tra kiến thức cơ bản về AWS",
+		"time_limit": 15,
+		"createdAt": "2026-07-19T08:00:00.000Z",
+		"updatedAt": "2026-07-19T08:00:00.000Z"
+	}
+]
 ```
 
 ### 4.2. Tạo quiz
 
-Dành cho `admin`.
+Dành cho tutor sở hữu course hoặc admin.
 
 ```http
 POST /api/courses/{course_id}/quizzes
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -852,12 +881,37 @@ Request:
 }
 ```
 
+Ràng buộc:
+
+- `title` là chuỗi bắt buộc và không được rỗng.
+- `description` là chuỗi không bắt buộc.
+- `time_limit` là số nguyên dương bắt buộc, tính bằng phút.
+
+Response:
+
+```json
+{
+	"message": "Quiz created successfully",
+	"quiz": {
+		"_id": "6870f8c90db5248718eb7101",
+		"course_id": "6870f8c90db5248718eb6e31",
+		"title": "AWS Quiz 1",
+		"description": "Kiểm tra kiến thức cơ bản về AWS",
+		"time_limit": 15,
+		"questions": []
+	}
+}
+```
+
 ### 4.3. Thêm câu hỏi vào quiz
 
-Dành cho `admin`.
+Dành cho tutor sở hữu course hoặc admin.
+
+Không thể thêm câu hỏi khi quiz đang có attempt `in_progress` chưa hết hạn.
 
 ```http
 POST /api/quizzes/{quiz_id}/questions
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -888,41 +942,130 @@ Request:
 }
 ```
 
-### 4.4. Lấy câu hỏi quiz
+Ràng buộc:
 
-Khi trả về cho học viên, không trả `is_correct`.
-
-```http
-GET /api/quizzes/{quiz_id}/questions
-```
+- `question_type` nhận `single_choice` hoặc `multiple_choice`.
+- `point` phải là số hữu hạn lớn hơn `0`.
+- Mỗi question phải có ít nhất hai answer và nội dung answer không được trùng nhau.
+- `single_choice` phải có đúng một answer mang `is_correct = true`.
+- `multiple_choice` phải có ít nhất một answer mang `is_correct = true`.
 
 Response:
 
 ```json
-[
-	{
-		"id": 1,
+{
+	"message": "Question added successfully",
+	"question": {
+		"_id": "6870f8c90db5248718eb7201",
 		"content": "Amazon EC2 dùng để làm gì?",
 		"question_type": "single_choice",
 		"point": 1,
 		"answers": [
 			{
-				"id": 1,
-				"content": "Lưu trữ object"
+				"_id": "6870f8c90db5248718eb7211",
+				"content": "Lưu trữ object",
+				"is_correct": false
 			},
 			{
-				"id": 2,
-				"content": "Tạo máy chủ ảo"
+				"_id": "6870f8c90db5248718eb7212",
+				"content": "Tạo máy chủ ảo",
+				"is_correct": true
+			}
+		]
+	}
+}
+```
+
+### 4.4. Lấy câu hỏi quiz
+
+Chỉ dành cho tutor sở hữu course hoặc admin để quản lý câu hỏi và đáp án. Student không được sử dụng endpoint này nhằm tránh xem đề trước khi thời gian làm bài bắt đầu.
+
+```http
+GET /api/quizzes/{quiz_id}/questions
+Authorization: Bearer <access_token>
+```
+
+Response dành cho tutor/admin, có đầy đủ `is_correct`:
+
+```json
+[
+	{
+		"_id": "6870f8c90db5248718eb7201",
+		"content": "Amazon EC2 dùng để làm gì?",
+		"question_type": "single_choice",
+		"point": 1,
+		"answers": [
+			{
+				"_id": "6870f8c90db5248718eb7211",
+				"content": "Lưu trữ object",
+				"is_correct": false
+			},
+			{
+				"_id": "6870f8c90db5248718eb7212",
+				"content": "Tạo máy chủ ảo",
+				"is_correct": true
 			}
 		]
 	}
 ]
 ```
 
-### 4.5. Nộp bài quiz
+### 4.5. Bắt đầu quiz
+
+Chỉ dành cho student có enrollment `active`. Quiz phải có ít nhất một câu hỏi.
 
 ```http
-POST /api/quizzes/{quiz_id}/submit
+POST /api/quizzes/{quiz_id}/start
+Authorization: Bearer <student_access_token>
+```
+
+Backend sử dụng thời gian server để tạo attempt với trạng thái `in_progress`:
+
+```text
+started_at = thời điểm bắt đầu
+expires_at = started_at + time_limit
+```
+
+Nếu student gọi lại endpoint khi vẫn còn một attempt `in_progress` chưa hết hạn, backend trả lại attempt đang làm thay vì tạo attempt mới. Nếu attempt cũ đã hết hạn, backend chuyển trạng thái của attempt đó thành `expired` rồi tạo attempt mới.
+
+Response:
+
+```json
+{
+	"attempt_id": "6870f8c90db5248718eb7301",
+	"started_at": "2026-07-19T08:45:00.000Z",
+	"expires_at": "2026-07-19T09:00:00.000Z",
+	"time_limit": 15,
+	"questions": [
+		{
+			"_id": "6870f8c90db5248718eb7201",
+			"content": "Amazon EC2 dùng để làm gì?",
+			"question_type": "single_choice",
+			"point": 1,
+			"answers": [
+				{
+					"_id": "6870f8c90db5248718eb7211",
+					"content": "Lưu trữ object"
+				},
+				{
+					"_id": "6870f8c90db5248718eb7212",
+					"content": "Tạo máy chủ ảo"
+				}
+			]
+		}
+	]
+}
+```
+
+Response dành cho student không chứa `is_correct`.
+
+### 4.6. Nộp bài quiz
+
+Chỉ dành cho student sở hữu attempt, còn enrollment `active`, attempt đang ở trạng thái `in_progress` và chưa quá `expires_at`.
+
+```http
+POST /api/quiz-attempts/{attempt_id}/submit
+Authorization: Bearer <student_access_token>
 ```
 
 Request:
@@ -931,34 +1074,57 @@ Request:
 {
 	"answers": [
 		{
-			"question_id": 1,
-			"answer_id": 2
+			"question_id": "6870f8c90db5248718eb7201",
+			"selected_answer_ids": [
+				"6870f8c90db5248718eb7212"
+			]
 		},
 		{
-			"question_id": 2,
-			"answer_id": 5
+			"question_id": "6870f8c90db5248718eb7202",
+			"selected_answer_ids": [
+				"6870f8c90db5248718eb7221",
+				"6870f8c90db5248718eb7222"
+			]
 		}
 	]
 }
 ```
 
+Với `single_choice`, `selected_answer_ids` được chọn tối đa một phần tử. Với `multiple_choice`, câu trả lời chỉ đúng khi tập ID được chọn trùng chính xác với tập đáp án đúng. Question không xuất hiện trong payload được tính là chưa trả lời và nhận `0` điểm.
+
+API từ chối payload có question/answer ID không hợp lệ, question không thuộc quiz, answer không thuộc question, hoặc question ID/answer ID bị lặp. Backend cũng từ chối attempt của student khác, attempt đã `submitted` hoặc attempt đã `expired`.
+
+Backend tự tính thời gian làm bài bằng thời gian server và lưu theo giây:
+
+```text
+duration_seconds = floor((submitted_at - started_at) / 1000)
+```
+
+Client không được gửi `started_at`, `submitted_at` hoặc `duration_seconds` trong request.
+
 Response:
 
 ```json
 {
-	"attempt_id": 10,
+	"attempt_id": "6870f8c90db5248718eb7301",
+	"status": "submitted",
 	"score": 8,
 	"total_score": 10,
 	"correct_answers": 8,
 	"total_questions": 10,
-	"submitted_at": "2026-07-03T09:00:00"
+	"duration_seconds": 523,
+	"submitted_at": "2026-07-19T09:00:00.000Z"
 }
 ```
 
-### 4.6. Xem lịch sử làm quiz
+### 4.7. Xem lịch sử làm quiz
+
+- Student chỉ xem attempt của chính mình và phải còn enrollment `active`.
+- Tutor sở hữu course và admin xem được attempt của các student.
 
 ```http
 GET /api/quizzes/{quiz_id}/attempts
+Authorization: Bearer <access_token>
 ```
 
 Response:
@@ -966,18 +1132,37 @@ Response:
 ```json
 [
 	{
-		"attempt_id": 10,
+		"_id": "6870f8c90db5248718eb7301",
+		"user_id": {
+			"_id": "6870f8c90db5248718eb6e33",
+			"full_name": "Student Example",
+			"email": "student@example.com"
+		},
+		"course_id": "6870f8c90db5248718eb6e31",
+		"quiz_id": "6870f8c90db5248718eb7101",
+		"status": "submitted",
+		"started_at": "2026-07-19T08:45:00.000Z",
+		"expires_at": "2026-07-19T09:00:00.000Z",
 		"score": 8,
 		"total_score": 10,
-		"submitted_at": "2026-07-03T09:00:00"
+		"correct_answers": 8,
+		"total_questions": 10,
+		"duration_seconds": 523,
+		"submitted_at": "2026-07-19T09:00:00.000Z",
+		"answers": []
 	}
 ]
 ```
 
-### 4.7. Cập nhật quiz
+### 4.8. Cập nhật quiz
+
+Dành cho tutor sở hữu course hoặc admin. Có thể cập nhật từng trường độc lập nhưng body phải có ít nhất một trường.
+
+Không thể cập nhật quiz khi đang có attempt `in_progress` chưa hết hạn.
 
 ```http
 PUT /api/quizzes/{quiz_id}
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -990,27 +1175,51 @@ Request:
 }
 ```
 
-### 4.8. Xóa quiz
+Response:
+
+```json
+{
+	"message": "Quiz updated successfully",
+	"quiz": {
+		"_id": "6870f8c90db5248718eb7101",
+		"title": "AWS Quiz Updated",
+		"description": "Updated quiz description",
+		"time_limit": 20
+	}
+}
+```
+
+### 4.9. Xóa quiz
+
+Dành cho tutor sở hữu course hoặc admin. Quiz bị xóa cứng cùng toàn bộ attempt của quiz.
+
+Không thể xóa quiz khi đang có attempt `in_progress` chưa hết hạn.
 
 ```http
 DELETE /api/quizzes/{quiz_id}
+Authorization: Bearer <access_token>
 ```
 
 Response:
 
 ```json
 {
-	"message": "Quiz deleted successfully"
+	"message": "Quiz and its attempts deleted successfully"
 }
 ```
 
-### 4.9. Cập nhật câu hỏi
+### 4.10. Cập nhật câu hỏi
+
+Dành cho tutor sở hữu course hoặc admin. Question nằm trực tiếp trong document Quiz nên endpoint chứa cả `quiz_id` và `question_id`.
+
+Không thể cập nhật câu hỏi khi quiz đang có attempt `in_progress` chưa hết hạn.
 
 ```http
-PUT /api/questions/{question_id}
+PUT /api/quizzes/{quiz_id}/questions/{question_id}
+Authorization: Bearer <access_token>
 ```
 
-Request:
+Request có thể chứa một hoặc nhiều trường:
 
 ```json
 {
@@ -1019,12 +1228,10 @@ Request:
 	"point": 1,
 	"answers": [
 		{
-			"id": 1,
 			"content": "Dịch vụ máy chủ ảo",
 			"is_correct": true
 		},
 		{
-			"id": 2,
 			"content": "Dịch vụ lưu trữ object",
 			"is_correct": false
 		}
@@ -1032,42 +1239,87 @@ Request:
 }
 ```
 
-### 4.10. Xóa câu hỏi
-
-```http
-DELETE /api/questions/{question_id}
-```
+Khi cập nhật toàn bộ `answers`, MongoDB tạo `_id` mới cho các embedded answer. Quy tắc số đáp án đúng được kiểm tra lại theo trạng thái cuối cùng, kể cả khi chỉ thay đổi `question_type`.
 
 Response:
 
 ```json
 {
-	"message": "Question deleted successfully"
+	"message": "Question updated successfully",
+	"question": {
+		"_id": "6870f8c90db5248718eb7201",
+		"content": "Amazon EC2 là dịch vụ gì?",
+		"question_type": "single_choice",
+		"point": 1,
+		"answers": []
+	}
 }
 ```
 
-### 4.11. Xem chi tiết một lần làm bài
+### 4.11. Xóa câu hỏi
+
+Dành cho tutor sở hữu course hoặc admin.
+
+Không thể xóa câu hỏi khi quiz đang có attempt `in_progress` chưa hết hạn.
 
 ```http
-GET /api/quiz-attempts/{attempt_id}
+DELETE /api/quizzes/{quiz_id}/questions/{question_id}
+Authorization: Bearer <access_token>
 ```
 
 Response:
 
 ```json
 {
-	"attempt_id": 10,
-	"quiz_id": 1,
+	"message": "Question deleted successfully from quiz"
+}
+```
+
+### 4.12. Xem chi tiết một lần làm bài
+
+- Student chỉ xem attempt của chính mình, đồng thời phải còn enrollment `active`.
+- Tutor chỉ xem attempt thuộc course mình sở hữu.
+- Admin xem được mọi attempt.
+
+```http
+GET /api/quiz-attempts/{attempt_id}
+Authorization: Bearer <access_token>
+```
+
+Response:
+
+```json
+{
+	"_id": "6870f8c90db5248718eb7301",
+	"user_id": {
+		"_id": "6870f8c90db5248718eb6e33",
+		"full_name": "Student Example",
+		"email": "student@example.com"
+	},
+	"course_id": "6870f8c90db5248718eb6e31",
+	"quiz_id": "6870f8c90db5248718eb7101",
+	"status": "submitted",
+	"started_at": "2026-07-19T08:45:00.000Z",
+	"expires_at": "2026-07-19T09:00:00.000Z",
 	"score": 8,
 	"total_score": 10,
-	"submitted_at": "2026-07-03T09:00:00",
+	"correct_answers": 8,
+	"total_questions": 10,
+	"duration_seconds": 523,
+	"submitted_at": "2026-07-19T09:00:00.000Z",
 	"answers": [
 		{
-			"question_id": 1,
+			"question_id": "6870f8c90db5248718eb7201",
 			"question_content": "Amazon EC2 dùng để làm gì?",
-			"selected_answer_id": 2,
-			"selected_answer": "Tạo máy chủ ảo",
-			"is_correct": true
+			"selected_answers": [
+				{
+					"answer_id": "6870f8c90db5248718eb7212",
+					"content": "Tạo máy chủ ảo"
+				}
+			],
+			"is_correct": true,
+			"earned_point": 1,
+			"max_point": 1
 		}
 	]
 }
@@ -1077,7 +1329,7 @@ Response:
 
 ```json
 {
-	"detail": "Quiz not found"
+	"message": "Resource not found"
 }
 ```
 
@@ -1086,13 +1338,26 @@ Response:
 401 Unauthorized
 403 Forbidden
 404 Not Found
+409 Conflict
+500 Internal Server Error
 ```
+
+| Status | Trường hợp |
+|---|---|
+| `400 Bad Request` | ObjectId, quiz/question fields hoặc submission payload không hợp lệ; update body rỗng; attempt đã hết thời gian |
+| `401 Unauthorized` | Thiếu access token hoặc token không hợp lệ/hết hạn |
+| `403 Forbidden` | Sai role, tutor không sở hữu course, student chưa active hoặc cố xem attempt của người khác |
+| `404 Not Found` | Không tìm thấy course, quiz, question hoặc attempt |
+| `409 Conflict` | Quiz chưa có câu hỏi; attempt đã được nộp; hoặc tutor/admin sửa, xóa quiz khi đang có attempt hoạt động |
+| `500 Internal Server Error` | Lỗi database hoặc lỗi hệ thống ngoài dự kiến |
 
 ---
 
 ## 5. AI API
 
 Project có phần AI hỗ trợ học tập và OpenAI API.
+
+> Trạng thái: Dự kiến triển khai, các endpoint trong phần này chưa được mount trong backend hiện tại.
 
 ### 5.1. Chat với AI
 
@@ -1104,8 +1369,8 @@ Request:
 
 ```json
 {
-	"course_id": 1,
-	"lesson_id": 2,
+	"course_id": "6870f8c90db5248718eb6e31",
+	"lesson_id": "6870f8c90db5248718eb6f41",
 	"message": "Giải thích giúp tôi EC2 là gì?"
 }
 ```
@@ -1128,7 +1393,7 @@ Response:
 
 ```json
 {
-	"lesson_id": 2,
+	"lesson_id": "6870f8c90db5248718eb6f41",
 	"summary": "Bài học này giới thiệu về EC2, cách tạo instance và cấu hình Security Group..."
 }
 ```
@@ -1145,7 +1410,7 @@ Request:
 
 ```json
 {
-	"lesson_id": 2,
+	"lesson_id": "6870f8c90db5248718eb6f41",
 	"number_of_questions": 5
 }
 ```
@@ -1192,6 +1457,8 @@ Response:
 
 có để lưu tài liệu/video.
 
+> Trạng thái: Dự kiến triển khai, endpoint trong phần này chưa được mount trong backend hiện tại.
+
 ### 6.1. Upload file bài học
 
 ```http
@@ -1213,7 +1480,7 @@ Response:
 }
 ```
 
-Sau đó lấy `file_url` này lưu vào bảng `lessons.video_url` hoặc `lessons.document_url`.
+Sau đó lấy `file_url` này lưu vào collection `lessons`, tại trường `video_url` hoặc `document_url`.
 
 ### Error response thường gặp
 
@@ -1276,3 +1543,20 @@ Tài khoản tutor mới đăng ký có `account_status = pending`. Admin phải
 | `DELETE /api/lessons/{lesson_id}` | Tutor sở hữu course hoặc `admin` |
 | `POST /api/lessons/{lesson_id}/complete` | Student enrollment active |
 | `GET /api/courses/{course_id}/progress` | Student enrollment active |
+
+### 7.4. Phân quyền Quiz và Attempt hiện tại
+
+| Endpoint | Quyền |
+|---|---|
+| `GET /api/courses/{course_id}/quizzes` | Student enrollment active, tutor sở hữu course hoặc `admin` |
+| `POST /api/courses/{course_id}/quizzes` | Tutor sở hữu course hoặc `admin` |
+| `GET /api/quizzes/{quiz_id}/questions` | Tutor sở hữu course hoặc `admin` |
+| `POST /api/quizzes/{quiz_id}/questions` | Tutor sở hữu course hoặc `admin` |
+| `PUT /api/quizzes/{quiz_id}` | Tutor sở hữu course hoặc `admin` |
+| `DELETE /api/quizzes/{quiz_id}` | Tutor sở hữu course hoặc `admin` |
+| `PUT /api/quizzes/{quiz_id}/questions/{question_id}` | Tutor sở hữu course hoặc `admin` |
+| `DELETE /api/quizzes/{quiz_id}/questions/{question_id}` | Tutor sở hữu course hoặc `admin` |
+| `POST /api/quizzes/{quiz_id}/start` | Student enrollment active |
+| `POST /api/quiz-attempts/{attempt_id}/submit` | Student sở hữu attempt, enrollment active và attempt chưa hết hạn |
+| `GET /api/quizzes/{quiz_id}/attempts` | Student xem của mình; tutor sở hữu course hoặc `admin` xem toàn bộ |
+| `GET /api/quiz-attempts/{attempt_id}` | Student sở hữu attempt và enrollment active; tutor sở hữu course hoặc `admin` |

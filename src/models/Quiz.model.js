@@ -31,7 +31,7 @@ const QuestionSchema = new mongoose.Schema(
 		point: {
 			type: Number,
 			default: 1,
-			min: 0,
+			min: 0.01,
 		},
 		answers: {
 			type: [AnswerSchema],

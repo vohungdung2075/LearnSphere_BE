@@ -4,6 +4,8 @@ import authRoutes from "./routes/auth.route.js";
 import courseRoutes from "./routes/course.route.js";
 import userRoutes from "./routes/user.route.js";
 import lessonRoutes from "./routes/lesson.route.js";
+import quizRoutes from "./routes/quiz.route.js";
+import quizAttemptRoutes from "./routes/quiz-attempt.route.js";
 
 const app = express();
 
@@ -18,5 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/lessons", lessonRoutes);
+app.use("/api/quizzes", quizRoutes);
+app.use("/api/quiz-attempts", quizAttemptRoutes);
 
 export default app;
