@@ -2,9 +2,9 @@ import { createLesson, getCourseLessons, getLessonById, updateLesson, deleteLess
 
 export const handleCreateLesson = async (req, res) => {
 	const { course_id } = req.params ?? {};
-    const { title, content, video_url, document_url, order_index } = req.body ?? {};
+	const { title, content, video_key, document_key, order_index } = req.body ?? {};
 	try {
-		const lesson = await createLesson(course_id, { title, content, video_url, document_url, order_index }, req.user._id, req.user.role);
+		const lesson = await createLesson(course_id, { title, content, video_key, document_key, order_index }, req.user._id, req.user.role);
 		return res.status(201).json({ message: "Lesson created successfully", lesson });
 	} catch (error) {
 		if (error.message === "INVALID_COURSE_ID") return res.status(400).json({ message: "Invalid course ID format" });
@@ -12,8 +12,12 @@ export const handleCreateLesson = async (req, res) => {
 		if (error.message === "FORBIDDEN_LESSON_ACTION") return res.status(403).json({ message: "Forbidden - Permission denied" });
 		if (error.message === "INVALID_LESSON_TITLE") return res.status(400).json({ message: "Valid lesson title is required" });
 		if (error.message === "INVALID_CONTENT") return res.status(400).json({ message: "Content must be a string" });
-		if (error.message === "INVALID_VIDEO_URL") return res.status(400).json({ message: "Video URL must be a string" });
-		if (error.message === "INVALID_DOCUMENT_URL") return res.status(400).json({ message: "Document URL must be a string" });
+		if (error.message === "INVALID_VIDEO_KEY") return res.status(400).json({ message: "Invalid video key" });
+		if (error.message === "INVALID_DOCUMENT_KEY") return res.status(400).json({ message: "Invalid document key" });
+		if (["INVALID_FILE_TYPE", "INVALID_FILE_SIZE"].includes(error.message)) return res.status(400).json({ message: "Invalid lesson file metadata" });
+		if (error.message === "FILE_TOO_LARGE") return res.status(413).json({ message: "Lesson file exceeds the allowed size" });
+		if (error.message === "FILE_NOT_FOUND_IN_S3") return res.status(404).json({ message: "Uploaded lesson file was not found in S3" });
+		if (error.message === "S3_HEAD_FAILED") return res.status(502).json({ message: "Unable to verify lesson file with S3" });
 		if (error.message === "INVALID_ORDER_INDEX") return res.status(400).json({ message: "Order index must be a positive integer" });
 		if (error.code === 11000) return res.status(409).json({ message: "This order index already exists in the course" });
 
@@ -54,9 +58,9 @@ export const handleGetLessonById = async (req, res) => {
 
 export const handleUpdateLesson = async (req, res) => {
 	const { lesson_id } = req.params ?? {};
-    const { title, content, video_url, document_url, order_index } = req.body ?? {};
+	const { title, content, video_key, document_key, order_index } = req.body ?? {};
 	try {
-		const updated = await updateLesson(lesson_id, { title, content, video_url, document_url, order_index }, req.user._id, req.user.role);
+		const updated = await updateLesson(lesson_id, { title, content, video_key, document_key, order_index }, req.user._id, req.user.role);
 		return res.status(200).json({ message: "Lesson updated successfully", lesson: updated });
 	} catch (error) {
 		if (error.message === "INVALID_LESSON_ID") return res.status(400).json({ message: "Invalid lesson ID format" });
@@ -65,8 +69,12 @@ export const handleUpdateLesson = async (req, res) => {
 		if (error.message === "NO_FIELDS_TO_UPDATE") return res.status(400).json({ message: "At least one lesson field is required" });
 		if (error.message === "INVALID_LESSON_TITLE") return res.status(400).json({ message: "Invalid lesson title format" });
 		if (error.message === "INVALID_CONTENT") return res.status(400).json({ message: "Content must be a string" });
-		if (error.message === "INVALID_VIDEO_URL") return res.status(400).json({ message: "Video URL must be a string" });
-		if (error.message === "INVALID_DOCUMENT_URL") return res.status(400).json({ message: "Document URL must be a string" });
+		if (error.message === "INVALID_VIDEO_KEY") return res.status(400).json({ message: "Invalid video key" });
+		if (error.message === "INVALID_DOCUMENT_KEY") return res.status(400).json({ message: "Invalid document key" });
+		if (["INVALID_FILE_TYPE", "INVALID_FILE_SIZE"].includes(error.message)) return res.status(400).json({ message: "Invalid lesson file metadata" });
+		if (error.message === "FILE_TOO_LARGE") return res.status(413).json({ message: "Lesson file exceeds the allowed size" });
+		if (error.message === "FILE_NOT_FOUND_IN_S3") return res.status(404).json({ message: "Uploaded lesson file was not found in S3" });
+		if (error.message === "S3_HEAD_FAILED") return res.status(502).json({ message: "Unable to verify lesson file with S3" });
 		if (error.message === "INVALID_ORDER_INDEX") return res.status(400).json({ message: "Order index must be a positive integer" });
 		if (error.code === 11000) return res.status(409).json({ message: "This order index already exists in the course" });
 

@@ -1,17 +1,17 @@
 import mongoose from "mongoose";
 import Course from "../models/Course.model.js";
 import QuizAttempt from "../models/QuizAttempt.model.js";
+import { validateStoredFileKey } from "./file.service.js";
 
-export const createCourse = async ( { title, description, thumbnail_url, enrollment_type }, creatorId ) => {
+export const createCourse = async ( { title, description, enrollment_type }, creatorId ) => {
 	const allowedEnrollmentTypes = ["open", "approval_required"];
 	if (!allowedEnrollmentTypes.includes(enrollment_type)) throw new Error("INVALID_ENROLLMENT_TYPE");
     if (description !== undefined && typeof description !== "string") throw new Error("INVALID_DESCRIPTION");
-	if (thumbnail_url !== undefined && typeof thumbnail_url !== "string") throw new Error("INVALID_THUMBNAIL_URL");
 
 	const new_course = await Course.create({
 		title: title.trim(),
 		description: description ? description.trim() : "",
-		thumbnail_url: thumbnail_url ? thumbnail_url.trim() : "",
+		thumbnail_key: "",
         enrollment_type: enrollment_type,
 		created_by: creatorId,
 	});
@@ -41,7 +41,7 @@ export const getCourseById = async (courseId) => {
 };
 
 
-export const updateCourse = async (courseId, { title, description, thumbnail_url, enrollment_type }, userId, userRole) => {
+export const updateCourse = async (courseId, { title, description, thumbnail_key, enrollment_type }, userId, userRole) => {
 	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
     
 	const course = await Course.findOne({ _id: courseId, is_deleted: false });
@@ -50,22 +50,35 @@ export const updateCourse = async (courseId, { title, description, thumbnail_url
 	const isOwner = course.created_by.toString() === userId.toString();
 	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_COURSE_ACTION");
     
-	if (title === undefined && description === undefined && thumbnail_url === undefined && enrollment_type === undefined) {
+	if (title === undefined && description === undefined && thumbnail_key === undefined && enrollment_type === undefined) {
 		throw new Error("NO_FIELDS_TO_UPDATE");
 	}
 
 	if (title !== undefined && (typeof title !== "string" || !title.trim())) throw new Error("INVALID_COURSE_TITLE");
     if (description !== undefined && typeof description !== "string") throw new Error("INVALID_DESCRIPTION");
-	if (thumbnail_url !== undefined && typeof thumbnail_url !== "string") throw new Error("INVALID_THUMBNAIL_URL");
+	if (thumbnail_key !== undefined && typeof thumbnail_key !== "string") throw new Error("INVALID_THUMBNAIL_KEY");
     
 	const allowedEnrollmentTypes = ["open", "approval_required"]; 
 	if (enrollment_type !== undefined && !allowedEnrollmentTypes.includes(enrollment_type)) {
         throw new Error("INVALID_ENROLLMENT_TYPE");
     }
 	
+	let normalizedThumbnailKey;
+	if (thumbnail_key !== undefined) {
+		normalizedThumbnailKey = thumbnail_key.trim();
+		if (normalizedThumbnailKey) {
+			normalizedThumbnailKey = await validateStoredFileKey({
+				courseId: course._id,
+				fileKey: normalizedThumbnailKey,
+				folder: "thumbnails",
+				invalidKeyError: "INVALID_THUMBNAIL_KEY",
+			});
+		}
+	}
+
 	if (title) course.title = title.trim();
 	if (description !== undefined) course.description = description.trim();
-	if (thumbnail_url !== undefined) course.thumbnail_url = thumbnail_url.trim();
+	if (thumbnail_key !== undefined) course.thumbnail_key = normalizedThumbnailKey;
 	if (enrollment_type) course.enrollment_type = enrollment_type;
 
 	const updatedCourse = await course.save();

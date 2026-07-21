@@ -17,13 +17,15 @@ const LessonSchema = new mongoose.Schema(
 			type: String,
 			default: "",
 		},
-		video_url: {
+		video_key: {
 			type: String,
 			default: "",
+			trim: true,
 		},
-		document_url: {
+		document_key: {
 			type: String,
 			default: "",
+			trim: true,
 		},
 		order_index: {
 			type: Number,
@@ -35,7 +37,7 @@ const LessonSchema = new mongoose.Schema(
 	{ timestamps: true },
 );
 
-LessonSchema.index( { course_id: 1, order_index: 1 }, { unique: true } );
+LessonSchema.index({ course_id: 1, order_index: 1 }, { unique: true });
 
 const Lesson = mongoose.model("Lesson", LessonSchema);
 export default Lesson;

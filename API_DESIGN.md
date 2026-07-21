@@ -247,7 +247,7 @@ Response:
 		"_id": "6870f8c90db5248718eb6e31",
 		"title": "AWS Basic",
 		"description": "Khóa học nhập môn AWS",
-		"thumbnail_url": "https://s3.amazonaws.com/...",
+		"thumbnail_key": "courses/6870f8c90db5248718eb6e31/thumbnails/aws-basic.png",
 		"enrollment_type": "approval_required",
 		"created_by": {
 			"_id": "6870f8c90db5248718eb6e32",
@@ -282,7 +282,6 @@ Request:
 {
 	"title": "AWS Basic",
 	"description": "Khóa học nhập môn AWS",
-	"thumbnail_url": "https://s3.amazonaws.com/aws-basic.png",
 	"enrollment_type": "approval_required"
 }
 ```
@@ -303,13 +302,15 @@ Response:
 		"_id": "6870f8c90db5248718eb6e31",
 		"title": "AWS Basic",
 		"description": "Khóa học nhập môn AWS",
-		"thumbnail_url": "https://s3.amazonaws.com/aws-basic.png",
+		"thumbnail_key": "",
 		"enrollment_type": "approval_required",
 		"created_by": "6870f8c90db5248718eb6e32",
 		"is_deleted": false
 	}
 }
 ```
+
+Course được tạo trước với `thumbnail_key` rỗng. Sau đó tutor/admin xin presigned upload URL bằng `course_id`, upload ảnh trực tiếp lên S3 rồi gọi `PUT /api/courses/{course_id}` để lưu `thumbnail_key`.
 
 ### 2.4. Cập nhật khóa học
 
@@ -326,7 +327,7 @@ Request:
 {
 	"title": "AWS Basic Updated",
 	"description": "Cập nhật nội dung khóa học AWS",
-	"thumbnail_url": "https://s3.amazonaws.com/aws-basic-new.png",
+	"thumbnail_key": "courses/6870f8c90db5248718eb6e31/thumbnails/aws-basic-new.png",
 	"enrollment_type": "open"
 }
 ```
@@ -457,7 +458,7 @@ Response:
 			"_id": "6870f8c90db5248718eb6e31",
 			"title": "AWS Basic",
 			"description": "Khóa học nhập môn AWS",
-			"thumbnail_url": "https://s3.amazonaws.com/...",
+			"thumbnail_key": "courses/6870f8c90db5248718eb6e31/thumbnails/aws-basic.png",
 			"created_by": {
 				"_id": "6870f8c90db5248718eb6e32",
 				"full_name": "Tutor Example",
@@ -619,8 +620,8 @@ Response:
 		"course_id": "6870f8c90db5248718eb6e31",
 		"title": "Introduction to Cloud Computing",
 		"content": "Cloud computing is...",
-		"video_url": "https://s3.amazonaws.com/video.mp4",
-		"document_url": "https://s3.amazonaws.com/document.pdf",
+		"video_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/video.mp4",
+		"document_key": "courses/6870f8c90db5248718eb6e31/lessons/documents/document.pdf",
 		"order_index": 1,
 		"createdAt": "2026-07-18T08:00:00.000Z",
 		"updatedAt": "2026-07-18T08:00:00.000Z"
@@ -643,8 +644,8 @@ Response:
 	"course_id": "6870f8c90db5248718eb6e31",
 	"title": "Introduction to Cloud Computing",
 	"content": "Cloud computing is...",
-	"video_url": "https://s3.amazonaws.com/video.mp4",
-	"document_url": "https://s3.amazonaws.com/document.pdf",
+	"video_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/video.mp4",
+	"document_key": "courses/6870f8c90db5248718eb6e31/lessons/documents/document.pdf",
 	"order_index": 1,
 	"createdAt": "2026-07-18T08:00:00.000Z",
 	"updatedAt": "2026-07-18T08:00:00.000Z"
@@ -666,8 +667,8 @@ Request:
 {
 	"title": "Introduction to Cloud Computing",
 	"content": "Cloud computing is...",
-	"video_url": "https://s3.amazonaws.com/video.mp4",
-	"document_url": "https://s3.amazonaws.com/document.pdf",
+	"video_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/video.mp4",
+	"document_key": "courses/6870f8c90db5248718eb6e31/lessons/documents/document.pdf",
 	"order_index": 1
 }
 ```
@@ -677,7 +678,7 @@ Ràng buộc:
 - `title` là chuỗi bắt buộc và không được rỗng.
 - `order_index` là số nguyên dương bắt buộc.
 - Mỗi `order_index` chỉ xuất hiện một lần trong cùng một course.
-- `content`, `video_url`, `document_url` là chuỗi không bắt buộc.
+- `content`, `video_key`, `document_key` là chuỗi không bắt buộc.
 
 Response:
 
@@ -689,8 +690,8 @@ Response:
 		"course_id": "6870f8c90db5248718eb6e31",
 		"title": "Introduction to Cloud Computing",
 		"content": "Cloud computing is...",
-		"video_url": "https://s3.amazonaws.com/video.mp4",
-		"document_url": "https://s3.amazonaws.com/document.pdf",
+		"video_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/video.mp4",
+		"document_key": "courses/6870f8c90db5248718eb6e31/lessons/documents/document.pdf",
 		"order_index": 1
 	}
 }
@@ -760,8 +761,8 @@ Request:
 {
 	"title": "Introduction to AWS Cloud",
 	"content": "Updated lesson content...",
-	"video_url": "https://s3.amazonaws.com/video-new.mp4",
-	"document_url": "https://s3.amazonaws.com/document-new.pdf",
+	"video_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/video-new.mp4",
+	"document_key": "courses/6870f8c90db5248718eb6e31/lessons/documents/document-new.pdf",
 	"order_index": 2
 }
 ```
@@ -776,8 +777,8 @@ Response:
 		"course_id": "6870f8c90db5248718eb6e31",
 		"title": "Introduction to AWS Cloud",
 		"content": "Updated lesson content...",
-		"video_url": "https://s3.amazonaws.com/video-new.mp4",
-		"document_url": "https://s3.amazonaws.com/document-new.pdf",
+		"video_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/video-new.mp4",
+		"document_key": "courses/6870f8c90db5248718eb6e31/lessons/documents/document-new.pdf",
 		"order_index": 2
 	}
 }
@@ -1458,47 +1459,126 @@ Response:
 
 ## 6. File Upload API cho S3
 
-có để lưu tài liệu/video.
+Module dùng private S3 bucket và presigned URL. File nhị phân được frontend upload trực tiếp lên S3, không truyền qua Express. MongoDB chỉ lưu `file_key`; không lưu presigned URL vì URL có thời hạn.
 
-> Trạng thái: Dự kiến triển khai, endpoint trong phần này chưa được mount trong backend hiện tại.
+### 6.1. Xin presigned upload URL
 
-### 6.1. Upload file bài học
+Dành cho tutor sở hữu course hoặc admin.
 
 ```http
-POST /api/files/upload
+POST /api/files/presigned-upload
+Authorization: Bearer <tutor_or_admin_access_token>
+Content-Type: application/json
 ```
 
 Request:
 
-```text
-multipart/form-data
-file: video.mp4 / document.pdf
+```json
+{
+	"course_id": "6870f8c90db5248718eb6e31",
+	"file_name": "lesson-01.mp4",
+	"content_type": "video/mp4",
+	"file_size": 52428800,
+	"folder": "lessons/videos"
+}
 ```
 
 Response:
 
 ```json
 {
-	"file_url": "https://s3.amazonaws.com/bucket/video.mp4"
+	"upload_url": "https://bucket.s3.amazonaws.com/...presigned...",
+	"file_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/uuid-lesson-01.mp4",
+	"content_type": "video/mp4",
+	"file_size": 52428800,
+	"max_size_bytes": 524288000,
+	"expires_in": 300
 }
 ```
 
-Sau đó lấy `file_url` này lưu vào collection `lessons`, tại trường `video_url` hoặc `document_url`.
+Frontend dùng `PUT <upload_url>` với body là file binary và header `Content-Type` giống request presign. Request PUT trực tiếp đến S3 không gửi JWT. Sau khi upload thành công, frontend lưu `file_key` bằng API update course hoặc create/update lesson.
+
+Folder, định dạng và giới hạn:
+
+| `folder` | File hợp lệ | Giới hạn |
+|---|---|---:|
+| `thumbnails` | `.jpg`, `.jpeg`, `.png`, `.webp` | 5 MB |
+| `lessons/videos` | `.mp4`, `.webm` | 500 MB |
+| `lessons/documents` | `.pdf`, `.docx` | 20 MB |
+
+Backend kiểm tra đuôi file khớp `content_type` và kiểm tra `file_size` trước khi ký URL. Khi key được gắn vào Course/Lesson, backend dùng S3 `HeadObject` để xác nhận object tồn tại, đúng Content-Type và kích thước thực tế không vượt giới hạn.
+
+### 6.2. Lấy URL thumbnail khóa học
+
+Endpoint public. Bucket vẫn private; backend chỉ đọc `thumbnail_key` từ course rồi trả presigned GET URL tạm thời.
+
+```http
+GET /api/files/course-thumbnail/{course_id}
+```
+
+Response:
+
+```json
+{
+	"download_url": "https://bucket.s3.amazonaws.com/...presigned...",
+	"file_key": "courses/6870f8c90db5248718eb6e31/thumbnails/uuid-aws-basic.png",
+	"expires_in": 900
+}
+```
+
+### 6.3. Lấy URL video hoặc tài liệu bài học
+
+Yêu cầu đăng nhập. Student phải có enrollment `active`; tutor phải sở hữu course; admin được phép truy cập.
+
+```http
+GET /api/files/presigned-download?lesson_id={lesson_id}&target_type=video
+Authorization: Bearer <access_token>
+```
+
+`target_type` nhận `video` hoặc `document`. Backend tự lấy `video_key`/`document_key` từ lesson; client không được gửi raw `file_key`.
+
+Response:
+
+```json
+{
+	"download_url": "https://bucket.s3.amazonaws.com/...presigned...",
+	"file_key": "courses/6870f8c90db5248718eb6e31/lessons/videos/uuid-lesson-01.mp4",
+	"expires_in": 900
+}
+```
+
+### 6.4. Luồng sử dụng
+
+Thumbnail course:
+
+```text
+Tạo course → xin presigned upload URL bằng course_id → PUT ảnh lên S3
+→ PUT course với thumbnail_key
+```
+
+File lesson:
+
+```text
+Xin presigned upload URL bằng course_id → PUT video/PDF lên S3
+→ POST/PUT lesson với video_key hoặc document_key
+```
 
 ### Error response thường gặp
 
 ```json
 {
-	"detail": "Unsupported file type"
+	"message": "INVALID_FILE_TYPE"
 }
 ```
 
-```text
-400 Bad Request
-401 Unauthorized
-413 Payload Too Large
-500 Internal Server Error
-```
+| Status | Trường hợp |
+|---|---|
+| `400 Bad Request` | ID, folder, target type, tên file, MIME/đuôi file hoặc kích thước không hợp lệ |
+| `401 Unauthorized` | Thiếu hoặc sai JWT ở upload/lesson download |
+| `403 Forbidden` | Tutor không sở hữu course hoặc student chưa có enrollment active |
+| `404 Not Found` | Không tìm thấy course, lesson hoặc object trên S3 |
+| `413 Payload Too Large` | File vượt giới hạn của loại upload |
+| `502 Bad Gateway` | Backend không thể xác minh object với S3 |
 
 ## 7. Phân quyền API
 
@@ -1563,3 +1643,11 @@ Tài khoản tutor mới đăng ký có `account_status = pending`. Admin phải
 | `POST /api/quiz-attempts/{attempt_id}/submit` | Student sở hữu attempt, enrollment active và attempt chưa hết hạn |
 | `GET /api/quizzes/{quiz_id}/attempts` | Student xem của mình; tutor sở hữu course hoặc `admin` xem toàn bộ |
 | `GET /api/quiz-attempts/{attempt_id}` | Student sở hữu attempt và enrollment active; tutor sở hữu course hoặc `admin` |
+
+### 7.5. Phân quyền File và S3 hiện tại
+
+| Endpoint | Quyền |
+|---|---|
+| `POST /api/files/presigned-upload` | Tutor sở hữu course hoặc `admin` |
+| `GET /api/files/course-thumbnail/{course_id}` | Public |
+| `GET /api/files/presigned-download` | Student enrollment active, tutor sở hữu course hoặc `admin` |

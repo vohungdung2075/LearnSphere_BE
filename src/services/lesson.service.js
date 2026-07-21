@@ -3,6 +3,7 @@ import Lesson from "../models/Lesson.model.js";
 import Course from "../models/Course.model.js";
 import Enrollment from "../models/Enrollment.model.js";
 import LessonProgress from "../models/LessonProgress.model.js";
+import { validateStoredFileKey } from "./file.service.js";
 
 const verifyAccessPermission = async (course, userId, userRole) => {
 	if (userRole === "admin") return;
@@ -27,7 +28,7 @@ const verifyAccessPermission = async (course, userId, userRole) => {
 };
 
 
-export const createLesson = async (courseId, { title, content, video_url, document_url, order_index }, userId, userRole) => {
+export const createLesson = async (courseId, { title, content, video_key, document_key, order_index }, userId, userRole) => {
 	if (!mongoose.isValidObjectId(courseId)) throw new Error("INVALID_COURSE_ID");
 
 	const course = await Course.findOne({ _id: courseId, is_deleted: false });
@@ -38,18 +39,37 @@ export const createLesson = async (courseId, { title, content, video_url, docume
 
 	if (typeof title !== "string" || !title.trim()) throw new Error("INVALID_LESSON_TITLE");
 	if (content !== undefined && typeof content !== "string") throw new Error("INVALID_CONTENT");
-	if (video_url !== undefined && typeof video_url !== "string") throw new Error("INVALID_VIDEO_URL");
-	if (document_url !== undefined && typeof document_url !== "string") throw new Error("INVALID_DOCUMENT_URL");
+	if (video_key !== undefined && typeof video_key !== "string") throw new Error("INVALID_VIDEO_KEY");
+	if (document_key !== undefined && typeof document_key !== "string") throw new Error("INVALID_DOCUMENT_KEY");
 	if (typeof order_index !== "number" || order_index < 1 || !Number.isInteger(order_index)) {
 		throw new Error("INVALID_ORDER_INDEX");
+	}
+
+	const normalizedVideoKey = video_key?.trim() ?? "";
+	const normalizedDocumentKey = document_key?.trim() ?? "";
+	if (normalizedVideoKey) {
+		await validateStoredFileKey({
+			courseId,
+			fileKey: normalizedVideoKey,
+			folder: "lessons/videos",
+			invalidKeyError: "INVALID_VIDEO_KEY",
+		});
+	}
+	if (normalizedDocumentKey) {
+		await validateStoredFileKey({
+			courseId,
+			fileKey: normalizedDocumentKey,
+			folder: "lessons/documents",
+			invalidKeyError: "INVALID_DOCUMENT_KEY",
+		});
 	}
 
 	const newLesson = await Lesson.create({
         course_id: courseId,
 		title: title.trim(),
 		content: content ? content.trim() : "",
-		video_url: video_url ? video_url.trim() : "",
-		document_url: document_url ? document_url.trim() : "",
+		video_key: normalizedVideoKey,
+		document_key: normalizedDocumentKey,
 		order_index: order_index,
 	});
 	return newLesson;
@@ -83,7 +103,7 @@ export const getLessonById = async (lessonId, userId, userRole) => {
 };
 
 
-export const updateLesson = async (lessonId, { title, content, video_url, document_url, order_index }, userId, userRole) => {
+export const updateLesson = async (lessonId, { title, content, video_key, document_key, order_index }, userId, userRole) => {
 	if (!mongoose.isValidObjectId(lessonId)) throw new Error("INVALID_LESSON_ID");
 
 	const lesson = await Lesson.findById(lessonId);
@@ -95,22 +115,48 @@ export const updateLesson = async (lessonId, { title, content, video_url, docume
 	const isOwner = course.created_by.toString() === userId.toString();
 	if (userRole !== "admin" && !isOwner) throw new Error("FORBIDDEN_LESSON_ACTION");
 
-	if (title === undefined && content === undefined && video_url === undefined && document_url === undefined && order_index === undefined) {
+	if (title === undefined && content === undefined && video_key === undefined && document_key === undefined && order_index === undefined) {
 		throw new Error("NO_FIELDS_TO_UPDATE");
 	}
 
 	if (title !== undefined && (typeof title !== "string" || !title.trim())) throw new Error("INVALID_LESSON_TITLE");
 	if (content !== undefined && typeof content !== "string") throw new Error("INVALID_CONTENT");
-	if (video_url !== undefined && typeof video_url !== "string") throw new Error("INVALID_VIDEO_URL");
-	if (document_url !== undefined && typeof document_url !== "string") throw new Error("INVALID_DOCUMENT_URL");
+	if (video_key !== undefined && typeof video_key !== "string") throw new Error("INVALID_VIDEO_KEY");
+	if (document_key !== undefined && typeof document_key !== "string") throw new Error("INVALID_DOCUMENT_KEY");
 	if (order_index !== undefined && (typeof order_index !== "number" || order_index < 1 || !Number.isInteger(order_index))) {
 		throw new Error("INVALID_ORDER_INDEX");
 	}
 
+	let normalizedVideoKey;
+	if (video_key !== undefined) {
+		normalizedVideoKey = video_key.trim();
+		if (normalizedVideoKey) {
+			normalizedVideoKey = await validateStoredFileKey({
+				courseId: course._id,
+				fileKey: normalizedVideoKey,
+				folder: "lessons/videos",
+				invalidKeyError: "INVALID_VIDEO_KEY",
+			});
+		}
+	}
+
+	let normalizedDocumentKey;
+	if (document_key !== undefined) {
+		normalizedDocumentKey = document_key.trim();
+		if (normalizedDocumentKey) {
+			normalizedDocumentKey = await validateStoredFileKey({
+				courseId: course._id,
+				fileKey: normalizedDocumentKey,
+				folder: "lessons/documents",
+				invalidKeyError: "INVALID_DOCUMENT_KEY",
+			});
+		}
+	}
+
 	if (title) lesson.title = title.trim();
 	if (content !== undefined) lesson.content = content.trim();
-	if (video_url !== undefined) lesson.video_url = video_url.trim();
-	if (document_url !== undefined) lesson.document_url = document_url.trim();
+	if (video_key !== undefined) lesson.video_key = normalizedVideoKey;
+	if (document_key !== undefined) lesson.document_key = normalizedDocumentKey;
 	if (order_index) lesson.order_index = order_index;
 	return await lesson.save();
 };

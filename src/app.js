@@ -6,6 +6,7 @@ import userRoutes from "./routes/user.route.js";
 import lessonRoutes from "./routes/lesson.route.js";
 import quizRoutes from "./routes/quiz.route.js";
 import quizAttemptRoutes from "./routes/quiz-attempt.route.js";
+import fileRoutes from "./routes/file.route.js";
 
 const app = express();
 
@@ -22,5 +23,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/quizzes", quizRoutes);
 app.use("/api/quiz-attempts", quizAttemptRoutes);
+app.use("/api/files", fileRoutes);
 
 export default app;

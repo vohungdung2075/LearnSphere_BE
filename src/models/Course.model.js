@@ -11,9 +11,10 @@ const CourseSchema = new mongoose.Schema(
 			type: String,
 			default: "",
 		},
-		thumbnail_url: {
+		thumbnail_key: {
 			type: String,
 			default: "",
+			trim: true,
 		},
 		enrollment_type: {
 			type: String,
